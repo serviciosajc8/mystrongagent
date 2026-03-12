@@ -16,6 +16,7 @@ Tus reglas más importantes:
 5. Cuando ella te pida ayuda para una tarea, dale PASO A PASO.
 6. Eres experto programador (HTML, JS, CSS).
 7. CRÍTICO: Si usas generar_imagen, incluye el Markdown exacto sin cambios.
+8. TIENES ACCESO A INTERNET: Si ella te pide noticias, datos actuales (como el clima, precio del dólar, eventos de hoy) o algo que no sepas, **DEBES USAR** la herramienta \`buscar_internet\` para darle información real y actualizada. No inventes datos.
 `
 };
 

@@ -3,13 +3,13 @@ export const buscarInternet = {
     type: "function",
     function: {
       name: "buscar_internet",
-      description: "Busca información actualizada en internet sobre cualquier tema.",
+      description: "Busca información actualizada en tiempo real en internet sobre cualquier tema (noticias, eventos, datos hoy).",
       parameters: {
         type: "object",
         properties: {
           query: {
             type: "string",
-            description: "La consulta de búsqueda (ej. 'noticias de hoy sobre IA' o 'quien es el presidente de...')",
+            description: "La consulta de búsqueda. Sé específico. Ej: 'precio dolar hoy mexico', 'noticias IA hoy', 'quien gano el partido de ayer'",
           },
         },
         required: ["query"],
@@ -18,30 +18,39 @@ export const buscarInternet = {
   },
   execute: async ({ query }: { query: string }) => {
     try {
-      // Usamos un proveedor de búsqueda simple o una búsqueda scrapeada
-      // Para este entorno, intentaremos una búsqueda vía fetch si es posible
-      // Si no, daremos un resultado simulado o guiaremos al usuario
-      
       console.log(`[Tool] Buscando en internet: ${query}`);
       
-      // Intentamos usar un motor de búsqueda que devuelva JSON simple o raspado
-      // En este caso, usaremos un proxy de búsqueda común para demos o implementaremos una lógica básica
-      const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`);
+      // DuckDuckGo Instant Answer API
+      const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&t=MyStrongAgent`);
       const data = await response.json();
       
+      let result = "";
+
       if (data.AbstractText) {
-        return `Resultado Principal: ${data.AbstractText}\nFuente: ${data.AbstractSource || 'DuckDuckGo'}`;
+        result += `RESUMEN: ${data.AbstractText}\n`;
       }
       
-      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
-        const topResult = data.RelatedTopics[0].Text || data.RelatedTopics[0].FirstURL;
-        return `Resultados relacionados: ${topResult}`;
+      if (data.AbstractSource) {
+        result += `FUENTE: ${data.AbstractSource}\n`;
       }
 
-      return `No se encontraron resultados directos para "${query}", pero te recomiendo revisar fuentes oficiales en línea.`;
+      if (data.RelatedTopics && data.RelatedTopics.length > 0) {
+        const topics = data.RelatedTopics
+          .slice(0, 3)
+          .map((t: any) => t.Text)
+          .filter((t: any) => t)
+          .join("\n- ");
+        if (topics) result += `TEMAS RELACIONADOS:\n- ${topics}\n`;
+      }
+
+      if (!result) {
+        return `No encontré un resumen directo para "${query}". Sugerencia para el agente: Intenta buscar términos más generales o en inglés si es un tema técnico, o informa que no hay datos inmediatos en el buscador rápido.`;
+      }
+
+      return result;
     } catch (error: any) {
       console.error("Error en buscar_internet:", error);
-      return `Error al buscar en internet: ${error.message}`;
+      return `Error técnico al buscar en internet: ${error.message}`;
     }
   },
 };
