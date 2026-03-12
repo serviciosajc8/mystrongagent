@@ -108,23 +108,6 @@ app.post('/api/chat', async (req, res) => {
     const allowedUserId = 6716935949; 
     const agentResponse = await processUserMessage(sessionId, allowedUserId, message);
     
-    // Auto-rename async
-    setTimeout(async () => {
-      try {
-        const history = await getConversationHistory(sessionId, 5);
-        if (history.length <= 4) {
-           const prompt = [
-             { role: 'system' as const, content: 'Genera un TÍTULO CORTO de 2 a 4 palabras que resuma este mensaje. Responde SOLO con el título, sin usar comillas.'},
-             { role: 'user' as const, content: message }
-           ];
-           const titleObj = await generateCompletion(prompt as any);
-           if (titleObj?.content) await renameSession(sessionId, titleObj.content);
-        }
-      } catch (e) {
-         console.error("Auto-rename failed:", e);
-      }
-    }, 100);
-
     res.json({ success: true, response: agentResponse });
   } catch (error: any) {
     console.error("Error processing chat:", error);

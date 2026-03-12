@@ -1,3 +1,6 @@
+import axios from 'axios';
+import * as cheerio from 'cheerio';
+
 export const buscarInternet = {
   schema: {
     type: "function",
@@ -9,7 +12,7 @@ export const buscarInternet = {
         properties: {
           query: {
             type: "string",
-            description: "La consulta de búsqueda. Sé específico y conciso. Ej: 'clima mexico hoy', 'precio bitcoin ahora', 'noticias ultima hora'",
+            description: "La consulta de búsqueda. Sé específico y conciso. Ej: 'último sismo méxico', 'clima cdmx hoy'",
           },
         },
         required: ["query"],
@@ -18,41 +21,44 @@ export const buscarInternet = {
   },
   execute: async ({ query }: { query: string }) => {
     try {
-      console.log(`[Tool] Buscando en internet: ${query}`);
+      console.log(`[Tool] Buscando en internet (Scraping mode): ${query}`);
       
-      const response = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&t=MyStrongAgent`);
-      const data = await response.json();
-      
-      let result = "";
-
-      // 1. Intentar obtener el resumen directo (Abstract)
-      if (data.AbstractText) {
-        result += `INFORMACIÓN ENCONTRADA: ${data.AbstractText}\n`;
-        if (data.AbstractSource) result += `FUENTE: ${data.AbstractSource}\n`;
-      }
-      
-      // 2. Si no hay resumen, usar los temas relacionados (RelatedTopics)
-      if (!data.AbstractText && data.RelatedTopics && data.RelatedTopics.length > 0) {
-        const extraInfo = data.RelatedTopics
-          .slice(0, 5)
-          .map((t: any) => t.Text)
-          .filter((t: any) => t && t.length > 10)
-          .join("\n- ");
-        
-        if (extraInfo) {
-          result += `DATOS RELACIONADOS:\n- ${extraInfo}\n`;
+      // Intentar DuckDuckGo modo HTML para resultados reales y no solo resúmenes de wiki
+      const response = await axios.get(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
         }
+      });
+
+      const $ = cheerio.load(response.data);
+      const results: any[] = [];
+
+      $('.result').each((i, el) => {
+        if (i < 5) {
+          const title = $(el).find('.result__title').text().trim();
+          const link = $(el).find('.result__url').attr('href');
+          const snippet = $(el).find('.result__snippet').text().trim();
+          if (title && link) {
+            results.push({ title, link: link.startsWith('//') ? 'https:' + link : link, snippet });
+          }
+        }
+      });
+
+      if (results.length === 0) {
+        return `No se encontraron resultados para "${query}". Intenta ser más general o usa 'leer_url' si conoces el enlace.`;
       }
 
-      // 3. Si no hay nada de nada
-      if (!result || result.length < 20) {
-        return `No se encontraron resultados directos para "${query}". \nSugerencia Interna: Intenta una búsqueda con palabras más simples. Si necesitas profundizar en una página específica, usa 'leer_url'.`;
-      }
+      let formattedResults = `RESULTADOS DE BÚSQUEDA PARA "${query}":\n\n`;
+      results.forEach((r, idx) => {
+        formattedResults += `${idx + 1}. ${r.title}\n   LINK: ${r.link}\n   RESUMEN: ${r.snippet}\n\n`;
+      });
 
-      return result + "\nNOTA: Si alguno de estos resultados parece relevante pero incompleto, usa 'leer_url' con el enlace correspondiente para obtener el contenido completo.";
+      formattedResults += "INSTRUCCIÓN PARA TI: Si uno de estos links parece tener la respuesta definitiva, **DEBES USAR** 'leer_url' con ese enlace para leer el contenido completo y dar una respuesta verídica.";
+      
+      return formattedResults;
     } catch (error: any) {
-      console.error("Error en buscar_internet:", error);
-      return `Error de conexión al buscar: ${error.message}`;
+      console.error("Error en buscar_internet:", error.message);
+      return `Error al buscar en internet: ${error.message}. Intenta de nuevo.`;
     }
   },
 };

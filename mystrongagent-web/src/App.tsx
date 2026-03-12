@@ -366,7 +366,6 @@ function App() {
             <span>➕</span> Nueva Conversación
           </div>
           
-          <div className="nav-section-title" style={{ marginTop: '1rem' }}>BÚSQUEDA</div>
           <div className="search-container">
             <input 
               type="text" 

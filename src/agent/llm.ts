@@ -28,20 +28,32 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
         tool_choice: "auto",
         temperature: 0.5,
       });
+
+      if (!response || !response.choices || response.choices.length === 0) {
+        throw new Error("Respuesta vacía de Groq");
+      }
       return response.choices[0].message;
     } catch (error) {
       console.error("Groq API error. Falling back to OpenRouter...", error);
       return generateCompletion(messages, tools, true);
     }
   } else if (openRouter) {
-    const response = await openRouter.chat.completions.create({
-      model: env.OPENROUTER_MODEL,
-      messages,
-      tools,
-      tool_choice: "auto",
-      temperature: 0.5,
-    });
-    return response.choices[0].message;
+    try {
+      const response = await openRouter.chat.completions.create({
+        model: env.OPENROUTER_MODEL,
+        messages,
+        tools,
+        tool_choice: "auto",
+        temperature: 0.5,
+      });
+      if (!response || !response.choices || response.choices.length === 0) {
+        throw new Error("Respuesta vacía de OpenRouter");
+      }
+      return response.choices[0].message;
+    } catch (error: any) {
+      console.error("OpenRouter API error:", error);
+      throw error;
+    }
   } else {
     throw new Error("No valid LLM client configuration found.");
   }
@@ -50,15 +62,16 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
 export async function processAudio(audioPath: string) {
   if (groq) {
     try {
+      // Intentamos enviar el archivo directamente
       const translation = await groq.audio.transcriptions.create({
         file: fs.createReadStream(audioPath),
         model: "whisper-large-v3",
-        language: "es", // Opcional, pero ayuda a la velocidad si sabes que hablan español
+        language: "es",
         response_format: "json",
       });
       return translation.text;
-    } catch (error) {
-      console.error("Error transcribiendo audio con Groq:", error);
+    } catch (error: any) {
+      console.error("Error transcribiendo audio con Groq:", error.message);
       throw error;
     }
   } else {
