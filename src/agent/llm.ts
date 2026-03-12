@@ -42,7 +42,7 @@ function prepareMessages(messages: any[]) {
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",
-  "llama-3.1-70b-versatile",
+  "llama-3.1-8b-instant",
   "mixtral-8x7b-32768",
 ];
 
@@ -68,15 +68,16 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
     } catch (error: any) {
       console.error(`Groq error (${currentModel}):`, error.message);
       
-      // Si recibimos un 400 (Bad Request), no reintentamos con el mismo proveedor para evitar bucles infinitos por mal formato
-      if (error.status === 400) throw error;
+      const errorMsg = error.message?.toLowerCase() || "";
+      const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
 
-      // Reintentar con el siguiente modelo de Groq
+      if (error.status === 400 && !isDecommissioned) throw error;
+
       if (groqModelIndex + 1 < GROQ_MODELS.length) {
+        console.log(`[LLM] Reintentando con el siguiente modelo de Groq...`);
         return generateCompletion(messages, tools, false, groqModelIndex + 1);
       }
 
-      // Si todos los modelos de Groq fallan, ir a OpenRouter
       if (openRouter) {
         console.log("Cambiando a OpenRouter por error en todos los modelos de Groq...");
         return generateCompletion(messages, tools, true);
