@@ -4,6 +4,9 @@
   "description": "My personal AI Agent using Telegram",
   "main": "src/index.ts",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node --experimental-specifier-resolution=node dist/index.js",

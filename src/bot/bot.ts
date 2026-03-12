@@ -5,8 +5,7 @@ import { clearHistory } from "../memory/firebase.js";
 
 // Ensure bot token exists before initialization
 if (!env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN === "SUTITUYE POR EL TUYO") {
-    console.error("TELEGRAM_BOT_TOKEN is not valid. Please set it in your .env file.");
-    process.exit(1);
+    console.warn("⚠️ TELEGRAM_BOT_TOKEN no es válido. El bot de Telegram no se iniciará.");
 }
 
 const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
@@ -105,6 +104,9 @@ bot.catch((err) => {
 });
 
 export function startBot() {
+    if (!env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN === "SUTITUYE POR EL TUYO") {
+        return;
+    }
     console.log("Starting Telegram Bot via long polling...");
     bot.start();
 }

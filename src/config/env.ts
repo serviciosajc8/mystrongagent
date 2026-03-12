@@ -24,7 +24,8 @@ export function validateEnv() {
   }
 
   if (missing.length > 0) {
-    console.error(`Missing required environment variables: ${missing.join(", ")}`);
-    process.exit(1);
+    console.warn(`⚠️ ADVERTENCIA: Faltan variables de entorno requeridas: ${missing.join(", ")}`);
+    console.warn("Algunas funciones (como el Bot o el Chat) podrían no funcionar correctamente.");
+    // No salimos con process.exit(1) para permitir que el servidor web al menos intente arrancar
   }
 }
