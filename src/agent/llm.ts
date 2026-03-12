@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import OpenAI from "openai";
 import { env } from "../config/env.js";
+import fs from "fs";
 
 const groq = env.GROQ_API_KEY && env.GROQ_API_KEY !== "SUTITUYE POR EL TUYO" 
   ? new Groq({ apiKey: env.GROQ_API_KEY }) 
@@ -43,5 +44,24 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
     return response.choices[0].message;
   } else {
     throw new Error("No valid LLM client configuration found.");
+  }
+}
+
+export async function processAudio(audioPath: string) {
+  if (groq) {
+    try {
+      const translation = await groq.audio.transcriptions.create({
+        file: fs.createReadStream(audioPath),
+        model: "whisper-large-v3",
+        language: "es", // Opcional, pero ayuda a la velocidad si sabes que hablan español
+        response_format: "json",
+      });
+      return translation.text;
+    } catch (error) {
+      console.error("Error transcribiendo audio con Groq:", error);
+      throw error;
+    }
+  } else {
+    throw new Error("Se requiere la API de Groq para transcribir audio.");
   }
 }

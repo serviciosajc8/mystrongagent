@@ -52,6 +52,53 @@ bot.on("message:text", async (ctx) => {
     }
 });
 
+import path from "path";
+import fs from "fs";
+import os from "os";
+import { processAudio } from "../agent/llm.js";
+
+// Listen to voice messages
+bot.on("message:voice", async (ctx) => {
+    try {
+        await ctx.replyWithChatAction("typing");
+        const userId = ctx.from.id;
+        const sessionId = `telegram_session_${userId}`;
+
+        const file = await ctx.getFile();
+        const url = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+        
+        // Download file
+        const res = await fetch(url);
+        const buffer = await res.arrayBuffer();
+        
+        // Formatear archivo temporal
+        const tempPath = path.join(os.tmpdir(), `${ctx.message.message_id}.ogg`);
+        fs.writeFileSync(tempPath, Buffer.from(buffer));
+        
+        // Notificar que se está transcribiendo
+        // await ctx.reply("🎧 Transcribiendo tu audio...");
+
+        const textToProcess = await processAudio(tempPath);
+        fs.unlinkSync(tempPath); // Limpieza temporal
+
+        if (!textToProcess || textToProcess.trim() === "") {
+            await ctx.reply("No pude escuchar nada en el audio o estaba vacío.");
+            return;
+        }
+
+        // Contestamos qué fue lo que entendió el agente (opcional pero util)
+        await ctx.reply(`*Tú:* _${textToProcess}_`, { parse_mode: "Markdown" });
+
+        // Procesar como texto normal
+        const response = await processUserMessage(sessionId, userId, textToProcess);
+        await ctx.reply(response);
+
+    } catch (error) {
+        console.error("Error processing voice message:", error);
+        await ctx.reply("Ha ocurrido un error al procesar o transcribir tu audio.");
+    }
+});
+
 // Capture errors
 bot.catch((err) => {
     console.error(`Error for ctx ${err.ctx.update.update_id}:`, err.error);

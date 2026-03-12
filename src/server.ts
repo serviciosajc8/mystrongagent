@@ -93,6 +93,44 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+import multer from 'multer';
+import os from 'os';
+import { processAudio } from './agent/llm.js';
+
+const upload = multer({ dest: os.tmpdir() });
+
+// API: Mandar audio al agente
+app.post('/api/chat/audio', upload.single('audio'), async (req, res) => {
+  try {
+    const sessionId = req.body.sessionId || 'default_web_session';
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ success: false, error: 'No se subió archivo de audio.' });
+    }
+
+    const allowedUserId = 6716935949;
+
+    // Transcribir el archivo de audio usando whisper-large-v3 en Groq
+    const textToProcess = await processAudio(file.path);
+    
+    // Eliminar el archivo temporal
+    fs.unlinkSync(file.path);
+
+    if (!textToProcess || textToProcess.trim() === '') {
+      return res.status(400).json({ success: false, error: 'No se pudo entender la grabación.' });
+    }
+
+    // Procesar el texto transcrito
+    const agentResponse = await processUserMessage(sessionId, allowedUserId, textToProcess);
+
+    res.json({ success: true, transcribedText: textToProcess, response: agentResponse });
+  } catch(error: any) {
+    console.error("Error processing audio chat:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Quitado, reemplazado por /update más arriba
 
 // API: Limpiar la bóveda de memoria de UNA sesión en específico
