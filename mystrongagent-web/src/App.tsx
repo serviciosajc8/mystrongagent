@@ -335,7 +335,7 @@ function App() {
         </div>
         
         <div className="nav-menu">
-          <div className="nav-item action-btn" onClick={startNewSession} style={{ cursor: 'pointer', color: 'var(--c-pink)', fontWeight: 'bold' }}>
+          <div className="nav-item action-btn" onClick={() => { startNewSession(); setIsSidebarOpen(false); }} style={{ cursor: 'pointer', color: 'var(--c-pink)', fontWeight: 'bold' }}>
             <span>➕</span> Nueva Conversación
           </div>
           
@@ -388,7 +388,7 @@ function App() {
           <div className="nav-section-title">PROYECTOS Y DOCUMENTOS</div>
           <div 
              className={`nav-item ${currentView === 'boveda' ? 'active' : ''}`}
-             onClick={() => loadBoveda()}
+             onClick={() => { loadBoveda(); setIsSidebarOpen(false); }}
              style={{ cursor: 'pointer' }}
           >
             <span>📁</span> Bóveda de Conocimiento
