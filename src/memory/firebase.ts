@@ -62,32 +62,28 @@ export async function saveMessage(sessionId: string, msg: {
   }
 }
 
-export async function getConversationHistory(sessionId: string, limitNum: number = 30) {
+export async function getConversationHistory(sessionId: string, limitNum: number = 100) {
   try {
     const db = getDB();
     const messagesCol = collection(db, 'messages');
     
-    // Usamos where para filtrar directamente por sessionId. 
-    // Nota: Esto puede requerir un índice compuesto en Firebase si se usa con orderBy.
-    // Si no hay índice, fallará al principio pero es la forma correcta.
-    const q = query(
-      messagesCol, 
-      where('sessionId', '==', sessionId),
-      orderBy('timestamp', 'desc'), 
-      limit(limitNum)
-    );
-    const snapshot = await getDocs(q);
-    const rows = snapshot.docs.map(doc => doc.data());
+    // Obtenemos todos los mensajes (o una gran cantidad) y filtramos localmente 
+    // para evitar el error de falta de índices compuestos en Firestore.
+    const snapshot = await getDocs(messagesCol);
+    const rows = snapshot.docs
+      .map(doc => doc.data())
+      .filter(row => row.sessionId === sessionId);
     
-    return rows.reverse().map(row => {
+    // Ordenar localmente por timestamp
+    rows.sort((a: any, b: any) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+
+    return rows.slice(-limitNum).map(row => {
       const msg: any = { role: row.role };
       if (row.content) msg.content = row.content;
       if (row.name) msg.name = row.name;
-      if (row.tool_calls) msg.tool_calls = JSON.parse(row.tool_calls);
+      if (row.tool_calls) msg.tool_calls = (typeof row.tool_calls === 'string') ? JSON.parse(row.tool_calls) : row.tool_calls;
       if (row.tool_call_id) msg.tool_call_id = row.tool_call_id;
-      if (row.timestamp) {
-        msg.timestamp = row.timestamp;
-      }
+      if (row.timestamp) msg.timestamp = row.timestamp;
       return msg;
     });
   } catch(error) {
