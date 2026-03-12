@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
-import AudioWaveform from './components/AudioWaveform';
 import './index.css';
 
 interface Message {
@@ -26,7 +25,6 @@ function App() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
-  const synth = window.speechSynthesis;
 
   const [currentView, setCurrentView] = useState<'chat' | 'boveda'>('chat');
   const [bovedaFiles, setBovedaFiles] = useState<any[]>([]);
