@@ -2,12 +2,12 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, where, setDoc, getDoc } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDJMusKgD3fXc7b-KOmn1tJK2bz2C4joJo",
-  authDomain: "mystrongagent.firebaseapp.com",
-  projectId: "mystrongagent",
-  storageBucket: "mystrongagent.firebasestorage.app",
-  messagingSenderId: "369453375939",
-  appId: "1:369453375939:web:470a17920f017f4c721d76"
+  apiKey: process.env.FIREBASE_API_KEY,
+  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.FIREBASE_APP_ID
 };
 
 let dbInstance: any = null;
