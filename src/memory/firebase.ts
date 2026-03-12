@@ -67,22 +67,17 @@ export async function getConversationHistory(sessionId: string, limitNum: number
     const db = getDB();
     const messagesCol = collection(db, 'messages');
     
-    // Quitamos el 'where' para evitar requerir Firestore Composite Index
-    // Y lo filtramos localmente ya que es data ligera
+    // Usamos where para filtrar directamente por sessionId. 
+    // Nota: Esto puede requerir un índice compuesto en Firebase si se usa con orderBy.
+    // Si no hay índice, fallará al principio pero es la forma correcta.
     const q = query(
       messagesCol, 
+      where('sessionId', '==', sessionId),
       orderBy('timestamp', 'desc'), 
-      limit(limitNum * 3) // Fetch more to account for filtering
+      limit(limitNum)
     );
     const snapshot = await getDocs(q);
-    
-    let rows = snapshot.docs.map(doc => doc.data());
-    
-    // Filtrar localmente por ID de sesión
-    rows = rows.filter(r => r.sessionId === sessionId);
-    
-    // Recortar al límite tras filtrar
-    rows = rows.slice(0, limitNum);
+    const rows = snapshot.docs.map(doc => doc.data());
     
     return rows.reverse().map(row => {
       const msg: any = { role: row.role };

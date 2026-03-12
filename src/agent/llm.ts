@@ -18,19 +18,44 @@ const openRouter = env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== "SUTITUY
     })
   : null;
 
-export async function generateCompletion(messages: any[], tools?: any[], useFallback = false) {
-  // Primary: Groq
-  if (!useFallback && groq) {
+function prepareMessages(messages: any[]) {
+  return messages.map(m => {
+    const msg: any = { role: m.role };
+    
+    // El contenido solo se agrega si existe o no es nulo
+    if (m.content !== undefined && m.content !== null) {
+      msg.content = m.content;
+    } else if (m.role === 'assistant' && m.tool_calls) {
+      // Algunos proveedores requieren content nulo o vacío para respuestas con herramientas
+      msg.content = null; 
+    } else {
+      msg.content = ""; // Fallback seguro
+    }
+
+    if (m.tool_calls) msg.tool_calls = m.tool_calls;
+    if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+    if (m.name) msg.name = m.name;
+    
+    return msg;
+  });
+}
+
+const GROQ_MODELS = [
+  "llama-3.3-70b-versatile",
+  "llama-3.1-70b-versatile",
+  "mixtral-8x7b-32768",
+];
+
+export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0) {
+  const formattedMessages = prepareMessages(messages);
+
+  if (!useFallback && groq && groqModelIndex < GROQ_MODELS.length) {
+    const currentModel = GROQ_MODELS[groqModelIndex];
     try {
+      console.log(`[LLM] Intentando con Groq (${currentModel})...`);
       const response = await groq.chat.completions.create({
-        model: "llama-3.1-70b-versatile", // Cambiado a 3.1 para mayor estabilidad en todos los planes
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content || "",
-          tool_calls: m.tool_calls,
-          tool_call_id: m.tool_call_id,
-          name: m.name
-        })),
+        model: currentModel,
+        messages: formattedMessages,
         tools: tools && tools.length > 0 ? tools : undefined,
         tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.5,
@@ -41,28 +66,32 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       }
       return response.choices[0].message;
     } catch (error: any) {
-      console.error("Groq API error:", error.message);
-      // Intenta con OpenRouter si Groq falla
+      console.error(`Groq error (${currentModel}):`, error.message);
+      
+      // Si recibimos un 400 (Bad Request), no reintentamos con el mismo proveedor para evitar bucles infinitos por mal formato
+      if (error.status === 400) throw error;
+
+      // Reintentar con el siguiente modelo de Groq
+      if (groqModelIndex + 1 < GROQ_MODELS.length) {
+        return generateCompletion(messages, tools, false, groqModelIndex + 1);
+      }
+
+      // Si todos los modelos de Groq fallan, ir a OpenRouter
       if (openRouter) {
-        console.log("Intentando respaldo con OpenRouter...");
+        console.log("Cambiando a OpenRouter por error en todos los modelos de Groq...");
         return generateCompletion(messages, tools, true);
       }
-      throw new Error(`Error en Groq: ${error.message}`);
+      throw new Error(`Groq falló tras varios intentos: ${error.message}`);
     }
   } 
   
-  // Secondary: OpenRouter
   if (openRouter) {
     try {
+      const model = useFallback ? env.OPENROUTER_MODEL : "google/gemini-2.0-flash-exp:free";
+      console.log(`[LLM] Intentando con OpenRouter (${model})...`);
       const response = await openRouter.chat.completions.create({
-        model: env.OPENROUTER_MODEL,
-        messages: messages.map(m => ({
-          role: m.role,
-          content: m.content || "",
-          tool_calls: m.tool_calls,
-          tool_call_id: m.tool_call_id,
-          name: m.name
-        })),
+        model: model,
+        messages: formattedMessages,
         tools: tools && tools.length > 0 ? tools : undefined,
         tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.5,
@@ -73,11 +102,17 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       return response.choices[0].message;
     } catch (error: any) {
       console.error("OpenRouter API error:", error.message);
-      throw new Error(`Error en Proveedor (Respaldo): ${error.message}`);
+      
+      // Si es el primer intento con OpenRouter (usando el modelo rápido), intentar con el modelo principal
+      if (!useFallback) {
+         return generateCompletion(messages, tools, true);
+      }
+
+      throw new Error(`Error Proveedor (Respaldo): ${error.message}`);
     }
   }
 
-  throw new Error("No hay proveedores de IA configurados o disponibles.");
+  throw new Error("Sin proveedores de IA configurados.");
 }
 
 export async function processAudio(audioPath: string) {
@@ -91,10 +126,10 @@ export async function processAudio(audioPath: string) {
       });
       return translation.text;
     } catch (error: any) {
-      console.error("Error transcribiendo audio con Groq:", error.message);
-      throw new Error(`Error de transcripción: ${error.message}`);
+      console.error("Groq Whisper error:", error.message);
+      throw new Error(`Error voz: ${error.message}`);
     }
   } else {
-    throw new Error("Se requiere la API de Groq para transcribir audio.");
+    throw new Error("Groq API necesaria para voz.");
   }
 }

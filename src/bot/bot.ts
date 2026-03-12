@@ -49,12 +49,17 @@ function setupBot() {
                 await ctx.replyWithChatAction("typing");
                 const userId = ctx.from.id;
                 const sessionId = `telegram_session_${userId}`;
+                const thinkingMsg = await ctx.reply("🧠 Pensando...");
                 const response = await processUserMessage(sessionId, userId, ctx.message.text);
                 
+                await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);
                 await ctx.reply(response);
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error processing message:", error);
-                await ctx.reply("Ha ocurrido un error interno al procesar tu mensaje.");
+                const errorMessage = error.message?.includes("429") 
+                    ? "⚠️ Mis servidores están un poco saturados ahora mismo (error 429). Por favor, espera un minuto e inténtalo de nuevo, ¡estoy haciendo mi mejor esfuerzo! 😅"
+                    : "❌ Hubo un error procesando tu mensaje. Inténtalo de nuevo.";
+                await ctx.reply(errorMessage);
             }
         });
 
@@ -84,12 +89,17 @@ function setupBot() {
 
                 await ctx.reply(`*Tú:* _${textToProcess}_`, { parse_mode: "Markdown" });
 
+                const thinkingMsg = await ctx.reply("🧠 Pensando...");
                 const response = await processUserMessage(sessionId, userId, textToProcess);
+                
+                await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);
                 await ctx.reply(response);
-
-            } catch (error) {
+            } catch (error: any) {
                 console.error("Error processing voice message:", error);
-                await ctx.reply("Ha ocurrido un error al procesar o transcribir tu audio.");
+                const errorMessage = error.message?.includes("429")
+                    ? "⚠️ Servidores saturados (error 429). Por favor, dame un minuto y vuelve a hablarme."
+                    : "❌ Ups, tuve un problema procesando tu audio o mi cerebro está distraído. ¿Podrías repetirlo o escribirme?";
+                await ctx.reply(errorMessage);
             }
         });
 

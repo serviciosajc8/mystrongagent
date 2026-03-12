@@ -86,6 +86,7 @@ function App() {
         
         // Apagar el stream para apagar la "lucecita" del mic en la pestaña
         stream.getTracks().forEach(track => track.stop());
+        setIsListening(false);
 
         if (audioBlob.size === 0) return;
 
@@ -99,15 +100,18 @@ function App() {
 
           const resp = await fetch(`${API_URL}/chat/audio`, {
             method: 'POST',
-            body: formData, // Se enviará automáticamente usando el content-type "multipart/form-data" apropiado
+            body: formData,
           });
           
           const data = await resp.json();
           const resNow = new Date().toISOString();
           
           if (data.success && data.response && data.transcribedText) {
-             setMessages(prev => [...prev, { role: 'user', content: `🎙️ ${data.transcribedText}`, timestamp: now }]);
-             setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
+             setMessages(prev => [
+               ...prev, 
+               { role: 'user', content: `🎙️ ${data.transcribedText}`, timestamp: now },
+               { role: 'assistant', content: data.response, timestamp: resNow }
+             ]);
              if (voiceEnabled) speakText(data.response);
           } else {
              setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Hubo un error al procesar tu audio: ${data.error || 'Desconocido'}`, timestamp: resNow }]);
@@ -137,21 +141,25 @@ function App() {
       const response = await fetch(`${API_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToSpeak.substring(0, 1000) }) 
+        body: JSON.stringify({ text: textToSpeak.substring(0, 1500) }) 
       });
 
       if (!response.ok) throw new Error("Error en TTS");
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      setActiveAudio(audioUrl);
+      
+      // Limpiar el audio anterior si existe
+      if (activeAudio) URL.revokeObjectURL(activeAudio);
+      
+      setActiveAudio(null); // Reset breve para forzar re-montaje si es necesario
+      setTimeout(() => setActiveAudio(audioUrl), 10);
     } catch (e) {
-      console.error("ElevenLabs Error:", e);
-      // Fallback simple si la API falla
-      if (synth.speaking) synth.cancel();
+      // Fallback robusto con SpeechSynthesis
+      window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance(textToSpeak);
-      utter.lang = 'es-MX'; // Español México
-      synth.speak(utter);
+      utter.lang = 'es-MX';
+      window.speechSynthesis.speak(utter);
     }
   };
 
@@ -472,9 +480,11 @@ function App() {
         <div className="messages-container">
           {messages.length === 0 ? (
             <div className="empty-state">
-              <div className="empty-icon">🤖</div>
-              <h2>¡Hola, Jefa! Soy tu IA Multimodal.</h2>
-              <p>Escribe, háblame por voz o pídeme que dibuje algo.</p>
+              <div className="empty-card">
+                <div className="empty-icon">🤖</div>
+                <h2>¡Hola, Jefa! Soy tu IA Multimodal.</h2>
+                <p>Escribe, háblame por voz o pídeme que programe algo usando mis nuevos <b>Superpowers</b>.</p>
+              </div>
             </div>
           ) : (
             messages.map((msg, idx) => (
@@ -524,6 +534,16 @@ function App() {
         )}
 
         <div className="input-area">
+          {isListening && (
+             <div className="recording-wave-overlay">
+                <div className="wave-bar"></div>
+                <div className="wave-bar"></div>
+                <div className="wave-bar"></div>
+                <div className="wave-bar"></div>
+                <div className="wave-bar"></div>
+                <p>Escuchándote...</p>
+             </div>
+          )}
           <form onSubmit={sendMessage} className="input-form">
             <button 
               type="button" 

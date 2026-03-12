@@ -1,27 +1,29 @@
 import { generateCompletion } from "./llm.js";
 import { toolHandlers, toolsSchema } from "./tools/index.js";
 import { getConversationHistory, saveMessage } from "../memory/firebase.js";
+import fs from "fs";
+import path from "path";
 
 const MAX_ITERATIONS = 10;
 
-// Inject system prompt explicitly to guide the persona
-const SYSTEM_PROMPT = {
-  role: "system",
-  content: `Eres MyStrongAgent, un asistente personal de IA desarrollado por tu creador (a quien te diriges siempre en femenino). Tú eres masculino.
-Tus reglas más importantes:
-1. Eres un políglota experto: Puedes entender y responder perfectamente en ESPAÑOL, INGLÉS y PORTUGUÉS. Identifica el idioma en el que te habla ella y responde en ese mismo idioma de forma natural, manteniendo tu personalidad concisa y directa.
-2. NUNCA menciones cosas religiosas bajo ninguna circunstancia.
-3. Da respuestas AL GRANO y CONCISAS en cualquiera de los idiomas.
-4. Puedes ser amable, juguetón y usar groserías leves si el contexto lo permite.
-5. Cuando ella te pida ayuda para una tarea, dale PASO A PASO.
-6. Eres experto programador (HTML, JS, CSS).
-7. CRÍTICO: Si usas generar_imagen, incluye el Markdown exacto sin cambios.
-8. TIENES ACCESO A INTERNET Y NAVEGACIÓN WEB REAL: 
-   - Para noticias y datos rápidos, usa \`buscar_internet\`.
-   - Si necesitas profundizar en una página, leer un artículo completo o investigar a fondo un sitio web para responder con precisión, **DEBES USAR** la herramienta \`leer_url\`. 
-   - Compórtate como ChatGPT o Gemini: busca y luego navega por la información relevante para dar respuestas precisas, profesionales y comprobadas. No inventes datos.
-`
-};
+function getSystemPrompt() {
+  const skillsDir = path.join(process.cwd(), "src/agent/skills");
+  let fullContent = "Eres MyStrongAgent, un asistente personal de IA desarrollado por tu creador (a quien te diriges siempre en femenino). Tú eres masculino. 😉\n";
+  
+  try {
+    if (fs.existsSync(skillsDir)) {
+      const files = fs.readdirSync(skillsDir).filter(f => f.endsWith(".md"));
+      files.forEach(file => {
+        const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
+        fullContent += `\n\n--- HABILIDAD (${file}) ---\n${content}\n`;
+      });
+    }
+  } catch (e) {
+    console.error("Error cargando habilidades:", e);
+  }
+
+  return { role: "system" as const, content: fullContent };
+}
 
 // Helper to extract fields for firebase saving to avoid ts errors
 function helperFormatMsg(msg: any) {
@@ -35,27 +37,22 @@ function helperFormatMsg(msg: any) {
 }
 
 export async function processUserMessage(sessionId: string, userId: number, userMessage: string): Promise<string> {
-  // Save user message attached to sessionId
+  // Guardamos mensaje del usuario
   await saveMessage(sessionId, { role: 'user', content: userMessage });
 
-  // Fetch history EXACTLY ONCE at the start of the interaction
-  const dbHistory = await getConversationHistory(sessionId, 30);
+  // Historial actual
+  const dbHistory = await getConversationHistory(sessionId, 25);
   
-  // Si es el primer mensaje (historial vacío), nombrar la conversación por el tema tratado
-  if (dbHistory.length === 0) {
-    try {
-      const nameResponse = await generateCompletion([
-        { role: 'system', content: 'Eres un experto en resumir. Crea un título muy corto (máx 5 palabras) para este chat basado en el mensaje del usuario. Devuelve SOLO el texto del título, nada más.' },
-        { role: 'user', content: userMessage }
-      ]);
-      const title = nameResponse?.content?.replace(/["'.]/g, '') || userMessage.substring(0, 30);
-      import("../memory/firebase.js").then(m => m.updateSession(sessionId, { 
-        title, 
-        createdAt: new Date().toISOString() 
-      }));
-    } catch(e) {
-      console.error("Error al auto-nombrar sesión:", e);
-    }
+  // Auto-titular si es el inicio
+  if (dbHistory.length <= 1) { 
+    generateCompletion([
+      { role: 'system', content: 'Crea un título de 3 palabras para este chat.' },
+      { role: 'user', content: userMessage }
+    ]).then(res => {
+      if (res?.content) {
+        import("../memory/firebase.js").then(m => m.updateSession(sessionId, { title: (res.content || "Nueva Sesión").replace(/["'./]/g, '') }));
+      }
+    }).catch(() => {});
   }
 
   const memoryHistory = [...dbHistory, { role: 'user', content: userMessage }];
@@ -65,7 +62,7 @@ export async function processUserMessage(sessionId: string, userId: number, user
     iterations++;
     
     // Build context
-    const history = [SYSTEM_PROMPT, ...memoryHistory.map(m => {
+    const history = [getSystemPrompt(), ...memoryHistory.map(m => {
       const cleanMsg: any = { role: m.role };
       if (m.content !== undefined) cleanMsg.content = m.content;
       if (m.name) cleanMsg.name = m.name;

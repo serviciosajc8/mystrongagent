@@ -12,27 +12,33 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onClose }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Crear instancia de WaveSurfer
     const ws = WaveSurfer.create({
       container: containerRef.current,
-      waveColor: '#4f46e5',
-      progressColor: '#818cf8',
+      waveColor: '#9D4EDD', // Morado
+      progressColor: '#FF66A6', // Rosa
       cursorColor: '#ffffff',
-      barWidth: 2,
-      barRadius: 3,
-      height: 40,
+      barWidth: 3,
+      barGap: 3,
+      barRadius: 4,
+      height: 50,
       normalize: true,
+      cursorWidth: 2,
     });
 
     ws.load(audioUrl);
 
     ws.on('ready', () => {
       setDuration(ws.getDuration());
-      ws.play();
-      setIsPlaying(true);
+      setIsReady(true);
+      ws.play().catch(err => {
+        console.warn("Auto-play blocked, wait for user interaction.", err);
+      });
     });
 
     ws.on('audioprocess', () => {
@@ -41,7 +47,10 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onClose }) => {
 
     ws.on('play', () => setIsPlaying(true));
     ws.on('pause', () => setIsPlaying(false));
-    ws.on('finish', () => setIsPlaying(false));
+    ws.on('finish', () => {
+      setIsPlaying(false);
+      // Auto-cerrar si termina? No, mejor dejarlo para que lo cierren ellos
+    });
 
     waveSurferRef.current = ws;
 
@@ -57,7 +66,7 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onClose }) => {
   };
 
   const skip = (seconds: number) => {
-    if (waveSurferRef.current) {
+    if (waveSurferRef.current && isReady) {
       const time = waveSurferRef.current.getCurrentTime();
       waveSurferRef.current.setTime(Math.max(0, Math.min(duration, time + seconds)));
     }
@@ -70,23 +79,26 @@ const AudioWaveform: React.FC<AudioWaveformProps> = ({ audioUrl, onClose }) => {
   };
 
   return (
-    <div className="audio-player-container">
-      <div className="audio-controls">
-        <button className="player-btn" onClick={() => skip(-10)} title="Atrás 10s">⏪</button>
-        <button className="player-btn play-main" onClick={togglePlay}>
-          {isPlaying ? '⏸️' : '▶️'}
-        </button>
-        <button className="player-btn" onClick={() => skip(10)} title="Adelante 10s">⏩</button>
-      </div>
-      
-      <div className="waveform-wrapper">
-         <div ref={containerRef} className="waveform-draw" />
-         <div className="time-display">
-           <span>{formatTime(currentTime)}</span> / <span>{formatTime(duration)}</span>
-         </div>
-      </div>
+    <div className="audio-player-overlay">
+      <div className="audio-player-glass">
+        <div className="audio-controls">
+          <button className="player-btn" onClick={() => skip(-10)} title="Retroceder 10s">⏪</button>
+          <button className="player-btn play-main" onClick={togglePlay}>
+            {isPlaying ? '⏸️' : '▶️'}
+          </button>
+          <button className="player-btn" onClick={() => skip(10)} title="Adelantar 10s">⏩</button>
+        </div>
+        
+        <div className="audio-waveform-container">
+           <div ref={containerRef} className="waveform-canvas" />
+           <div className="time-info">
+             <span className="current-time">{formatTime(currentTime)}</span>
+             <span className="duration">/ {formatTime(duration)}</span>
+           </div>
+        </div>
 
-      <button className="player-close" onClick={onClose} title="Cerrar reproductor">×</button>
+        <button className="player-exit" onClick={onClose} title="Cerrar">✕</button>
+      </div>
     </div>
   );
 };
