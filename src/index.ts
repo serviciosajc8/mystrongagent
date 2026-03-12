@@ -38,3 +38,12 @@ process.on("SIGTERM", () => {
     console.log("Cerrando la aplicación...");
     process.exit(0);
 });
+
+// PREVENIR CIERRES POR ERRORES NO CAPTURADOS
+process.on("uncaughtException", (err) => {
+    console.error("❌ Error no capturado (Manteniendo APP activa):", err);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("❌ Promesa rechazada no manejada (Manteniendo APP activa):", reason);
+});

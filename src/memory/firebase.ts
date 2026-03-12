@@ -15,11 +15,19 @@ let dbInstance: any = null;
 export function initDB() {
   if (dbInstance) return dbInstance;
 
-  // Inicializar Firebase App
-  const app = initializeApp(firebaseConfig);
-  dbInstance = getFirestore(app);
-  
-  return dbInstance;
+  try {
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "SUTITUYE POR EL TUYO") {
+        console.warn("⚠️ FIREBASE_API_KEY no configurada. La base de datos no funcionará.");
+        return null;
+    }
+    // Inicializar Firebase App
+    const app = initializeApp(firebaseConfig);
+    dbInstance = getFirestore(app);
+    return dbInstance;
+  } catch (error) {
+    console.error("❌ Error inicializando Firebase:", error);
+    return null;
+  }
 }
 
 export function getDB() {
