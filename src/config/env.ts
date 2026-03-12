@@ -7,7 +7,7 @@ export const env = {
   TELEGRAM_ALLOWED_USER_IDS: (process.env.TELEGRAM_ALLOWED_USER_IDS || "").split(",").map((id) => id.trim()),
   GROQ_API_KEY: process.env.GROQ_API_KEY || "",
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
-  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "openrouter/free",
+  OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
   DB_PATH: process.env.DB_PATH || "./memory.db",
   GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || "./service-account.json",
 };

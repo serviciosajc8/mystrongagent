@@ -19,13 +19,20 @@ const openRouter = env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== "SUTITUY
   : null;
 
 export async function generateCompletion(messages: any[], tools?: any[], useFallback = false) {
+  // Primary: Groq
   if (!useFallback && groq) {
     try {
       const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages,
-        tools,
-        tool_choice: "auto",
+        model: "llama-3.1-70b-versatile", // Cambiado a 3.1 para mayor estabilidad en todos los planes
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content || "",
+          tool_calls: m.tool_calls,
+          tool_call_id: m.tool_call_id,
+          name: m.name
+        })),
+        tools: tools && tools.length > 0 ? tools : undefined,
+        tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.5,
       });
 
@@ -33,17 +40,31 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
         throw new Error("Respuesta vacía de Groq");
       }
       return response.choices[0].message;
-    } catch (error) {
-      console.error("Groq API error. Falling back to OpenRouter...", error);
-      return generateCompletion(messages, tools, true);
+    } catch (error: any) {
+      console.error("Groq API error:", error.message);
+      // Intenta con OpenRouter si Groq falla
+      if (openRouter) {
+        console.log("Intentando respaldo con OpenRouter...");
+        return generateCompletion(messages, tools, true);
+      }
+      throw new Error(`Error en Groq: ${error.message}`);
     }
-  } else if (openRouter) {
+  } 
+  
+  // Secondary: OpenRouter
+  if (openRouter) {
     try {
       const response = await openRouter.chat.completions.create({
         model: env.OPENROUTER_MODEL,
-        messages,
-        tools,
-        tool_choice: "auto",
+        messages: messages.map(m => ({
+          role: m.role,
+          content: m.content || "",
+          tool_calls: m.tool_calls,
+          tool_call_id: m.tool_call_id,
+          name: m.name
+        })),
+        tools: tools && tools.length > 0 ? tools : undefined,
+        tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.5,
       });
       if (!response || !response.choices || response.choices.length === 0) {
@@ -51,18 +72,17 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       }
       return response.choices[0].message;
     } catch (error: any) {
-      console.error("OpenRouter API error:", error);
-      throw error;
+      console.error("OpenRouter API error:", error.message);
+      throw new Error(`Error en Proveedor (Respaldo): ${error.message}`);
     }
-  } else {
-    throw new Error("No valid LLM client configuration found.");
   }
+
+  throw new Error("No hay proveedores de IA configurados o disponibles.");
 }
 
 export async function processAudio(audioPath: string) {
   if (groq) {
     try {
-      // Intentamos enviar el archivo directamente
       const translation = await groq.audio.transcriptions.create({
         file: fs.createReadStream(audioPath),
         model: "whisper-large-v3",
@@ -72,7 +92,7 @@ export async function processAudio(audioPath: string) {
       return translation.text;
     } catch (error: any) {
       console.error("Error transcribiendo audio con Groq:", error.message);
-      throw error;
+      throw new Error(`Error de transcripción: ${error.message}`);
     }
   } else {
     throw new Error("Se requiere la API de Groq para transcribir audio.");
