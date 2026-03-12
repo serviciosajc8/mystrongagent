@@ -19,6 +19,8 @@ function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   
@@ -316,7 +318,8 @@ function App() {
 
   return (
     <div className="app-container">
-      <aside className="sidebar">
+      {isSidebarOpen && <div className="mobile-overlay" onClick={() => setIsSidebarOpen(false)}></div>}
+      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="logo-icon">✨</div>
           <h2>MyStrongAgent</h2>
@@ -400,10 +403,16 @@ function App() {
         </div>
       </aside>
 
-      <main className="chat-area">
+      <main className="chat-area" onClick={() => { if(isSidebarOpen) setIsSidebarOpen(false) }}>
         {currentView === 'chat' ? (
           <>
             <header className="chat-header">
+              <button 
+                 className="hamburger-btn" 
+                 onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(!isSidebarOpen); }}
+              >
+                ☰
+              </button>
               <h1>Tu Asistente Personal (Voice & Vision)</h1>
             </header>
         
@@ -479,8 +488,15 @@ function App() {
         </div>
         </>) : (
           <div className="boveda-viewer" style={{ padding: '40px', overflowY: 'auto', height: '100%' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-              <h1 style={{fontSize: '1.8rem', color: '#fff' }}>📁 Tu Bóveda de Conocimiento</h1>
+            <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginBottom: '30px', gap: '15px' }}>
+              <button 
+                 className="hamburger-btn" 
+                 onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(!isSidebarOpen); }}
+              >
+                ☰
+              </button>
+              <h1 style={{fontSize: '1.8rem', color: '#fff', margin: 0 }}>📁 Tu Bóveda de Conocimiento</h1>
+              <div style={{ flex: 1}}></div>
               {bovedaPreview && <button onClick={() => setBovedaPreview(null)} className="save-btn">Volver a Bóveda</button>}
             </div>
             

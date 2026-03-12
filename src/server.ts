@@ -97,7 +97,14 @@ import multer from 'multer';
 import os from 'os';
 import { processAudio } from './agent/llm.js';
 
-const upload = multer({ dest: os.tmpdir() });
+const storage = multer.diskStorage({
+  destination: os.tmpdir(),
+  filename: (req, file, cb) => {
+    cb(null, `audio-${Date.now()}.webm`);
+  }
+});
+
+const upload = multer({ storage });
 
 // API: Mandar audio al agente
 app.post('/api/chat/audio', upload.single('audio'), async (req, res) => {

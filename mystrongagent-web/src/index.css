@@ -491,17 +491,73 @@ body {
   margin-top: 12px;
 }
 
+/* HAMBURGER BTN (DENTRO DE HEADER) */
+.hamburger-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-main);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.hamburger-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mobile-overlay {
+  display: none;
+}
+
 /* RESPONSIVE MÓVIL */
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
+    position: relative;
+    overflow: hidden;
   }
-  .sidebar { 
-    display: none; 
+  
+  .hamburger-btn {
+    display: inline-block;
   }
+  
   .chat-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
     padding: 16px 20px;
   }
+  
+  .sidebar {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 280px;
+    height: 100vh;
+    transition: left 0.3s ease-in-out;
+    z-index: 50;
+    display: flex;
+  }
+  
+  .sidebar.open {
+    left: 0;
+  }
+  
+  .mobile-overlay {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0,0,0,0.5);
+    z-index: 40;
+    backdrop-filter: blur(2px);
+  }
+
   .messages-container {
     padding: 20px;
   }
