@@ -26,7 +26,7 @@ function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -60,6 +60,15 @@ function App() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Auto-resize textarea
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
+    }
+  }, [input]);
 
   const toggleListen = async () => {
     if (isListening && mediaRecorderRef.current) {
@@ -300,6 +309,7 @@ function App() {
     const userMessage = input.trim();
     const now = new Date().toISOString();
     setInput('');
+    if (inputRef.current) inputRef.current.style.height = 'auto';
     setMessages(prev => [...prev, { role: 'user', content: userMessage, timestamp: now }]);
     setLoading(true);
 
@@ -553,12 +563,18 @@ function App() {
             >
               🎤
             </button>
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
+              rows={1}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Grabando... (Vuelve a tocar el micrófono rojo al terminar para enviar) 🛑" : "Sigue escribiendo aunque yo esté pensando..."}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder={isListening ? "Grabando..." : "Escribe aquí (Presiona Enter para enviar, Shift+Enter para nueva línea)..."}
               autoFocus
             />
             <button type="submit" disabled={!input.trim() || loading} className="send-btn">
