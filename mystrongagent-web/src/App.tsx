@@ -35,7 +35,9 @@ function App() {
   const [bovedaFiles, setBovedaFiles] = useState<any[]>([]);
   const [bovedaPreview, setBovedaPreview] = useState<{name: string, content: string} | null>(null);
 
-  const API_URL = import.meta.env.PROD ? '/api' : 'http://localhost:3000/api';
+  const API_URL = import.meta.env.PROD 
+    ? '/api' 
+    : (window.location.hostname === 'localhost' ? 'http://localhost:3000/api' : `http://${window.location.hostname}:3000/api`);
 
   // Boot up
   useEffect(() => {
@@ -106,11 +108,11 @@ function App() {
              setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
              speakText(data.response);
           } else {
-             setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Hubo un error al procesar tu audio.", timestamp: resNow }]);
+             setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Hubo un error al procesar tu audio: ${data.error || 'Desconocido'}`, timestamp: resNow }]);
           }
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error sending voice message:", error);
-          setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Error de conexión enviando el audio.", timestamp: new Date().toISOString() }]);
+          setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Error de conexión enviando el audio: ${error.message || 'Desconocido'}`, timestamp: new Date().toISOString() }]);
         } finally {
           setLoading(false);
           inputRef.current?.focus();
@@ -274,11 +276,11 @@ function App() {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
         speakText(data.response);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Hubo un error al procesar tu mensaje.", timestamp: resNow }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Hubo un error al procesar tu mensaje: ${data.error || 'Desconocido'}`, timestamp: resNow }]);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
-      setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Error de conexión con el agente.", timestamp: new Date().toISOString() }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Error de conexión con el agente: ${error.message || 'Desconocido'}`, timestamp: new Date().toISOString() }]);
     } finally {
       setLoading(false);
     }

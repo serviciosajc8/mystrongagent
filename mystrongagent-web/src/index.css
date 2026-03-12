@@ -40,6 +40,7 @@ body {
   display: flex;
   height: 100vh;
   width: 100vw;
+  overflow: hidden;
 }
 
 /* ... SIDEBAR (queda igual) ... */
@@ -522,6 +523,8 @@ body {
   
   .hamburger-btn {
     display: inline-block;
+    z-index: 60; /* Asegurarse de que sea clickeable por encima del header */
+    position: relative;
   }
   
   .chat-header {
@@ -558,11 +561,18 @@ body {
     backdrop-filter: blur(2px);
   }
 
+  .chat-area {
+    height: 100vh;
+    width: 100vw;
+  }
+
   .messages-container {
     padding: 20px;
+    height: calc(100vh - 160px); /* Ajuste de scroll considerando header e input */
   }
   .input-area {
     padding: 0 16px 20px;
+    background: var(--bg-dark); /* Evita transparencia molesta en movil */
   }
   .message-bubble-container {
     max-width: 85%;
