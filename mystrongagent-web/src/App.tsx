@@ -25,7 +25,8 @@ function App() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   
-  const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<BlobPart[]>([]);
   const synth = window.speechSynthesis;
 
   const [currentView, setCurrentView] = useState<'chat' | 'boveda'>('chat');
@@ -37,7 +38,6 @@ function App() {
   // Boot up
   useEffect(() => {
     fetchSessionsList();
-    setupSpeechRecognition();
   }, []);
 
   // When session changes, load its history
@@ -55,48 +55,71 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const setupSpeechRecognition = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'es-ES';
-      recognition.continuous = true; // Escucha continua (dictado largo)
-      recognition.interimResults = false; // Solo procesa cuando terminas la frase para no parpadear tanto
-
-      recognition.onresult = (event: any) => {
-        const last = event.results.length - 1;
-        const transcript = event.results[last][0].transcript;
-        setInput(prev => prev ? prev + ' ' + transcript : transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-        console.error("Error en reconocimiento de voz:", event.error);
-        if (event.error === 'not-allowed') {
-           alert("Jefa, tu navegador me bloqueó el micrófono :( Por favor dame permisos desde el candadito en la barra de URL arriba 🔒.");
-        }
-        setIsListening(false);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-        inputRef.current?.focus();
-      };
-
-      recognitionRef.current = recognition;
-    }
-  };
-
-  const toggleListen = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
+  const toggleListen = async () => {
+    if (isListening && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
       setIsListening(false);
-    } else {
-      if (recognitionRef.current) {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } else {
-        alert("Tu navegador no soporta el reconocimiento de voz nativo.");
-      }
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
+        
+        // Apagar el stream para apagar la "lucecita" del mic en la pestaña
+        stream.getTracks().forEach(track => track.stop());
+
+        if (audioBlob.size === 0) return;
+
+        setLoading(true);
+        const now = new Date().toISOString();
+
+        try {
+          const formData = new FormData();
+          formData.append('audio', audioBlob, 'voice.webm');
+          formData.append('sessionId', currentSessionId);
+
+          const resp = await fetch(`${API_URL}/chat/audio`, {
+            method: 'POST',
+            body: formData, // Se enviará automáticamente usando el content-type "multipart/form-data" apropiado
+          });
+          
+          const data = await resp.json();
+          const resNow = new Date().toISOString();
+          
+          if (data.success && data.response && data.transcribedText) {
+             setMessages(prev => [...prev, { role: 'user', content: `🎙️ ${data.transcribedText}`, timestamp: now }]);
+             setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
+             speakText(data.response);
+          } else {
+             setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Hubo un error al procesar tu audio.", timestamp: resNow }]);
+          }
+        } catch (error) {
+          console.error("Error sending voice message:", error);
+          setMessages(prev => [...prev, { role: 'assistant', content: "⚠️ Error de conexión enviando el audio.", timestamp: new Date().toISOString() }]);
+        } finally {
+          setLoading(false);
+          inputRef.current?.focus();
+        }
+      };
+
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (err) {
+      console.error("Error al acceder al micrófono:", err);
+      alert("No se pudo acceder al micrófono. Por favor concédele permisos a tu navegador.");
     }
   };
 
@@ -224,8 +247,8 @@ function App() {
     if (e) e.preventDefault();
     if (!input.trim() || loading) return;
 
-    if (isListening) {
-      recognitionRef.current?.stop();
+    if (isListening && mediaRecorderRef.current) {
+      mediaRecorderRef.current.stop();
     }
 
     const userMessage = input.trim();
@@ -443,7 +466,7 @@ function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isListening ? "Escuchando... te estoy oyendo (tu cursor sigue activo al final)..." : "Sigue escribiendo aunque yo esté pensando..."}
+              placeholder={isListening ? "Grabando... (Vuelve a tocar el micrófono rojo al terminar para enviar) 🛑" : "Sigue escribiendo aunque yo esté pensando..."}
               autoFocus
             />
             <button type="submit" disabled={!input.trim() || loading} className="send-btn">
