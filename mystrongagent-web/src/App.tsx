@@ -127,24 +127,40 @@ function App() {
     }
   };
 
-  const speakText = (text: string) => {
+  const speakText = async (text: string) => {
     if (!voiceEnabled) return;
-    const textToSpeak = text.replace(/!\[.*?\]\(.*?\)/g, ' Aquí tienes la imagen solicitada. ');
+    const textToSpeak = text.replace(/!\[.*?\]\(.*?\)/g, ' Aquí tienes la imagen solicitada. ')
+                            .replace(/`{3}[\s\S]*?`{3}/g, ' Aquí hay un bloque de código. ');
 
-    if (synth.speaking) {
-      synth.cancel();
+    try {
+      const response = await fetch(`${API_URL}/tts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: textToSpeak.substring(0, 1000) }) // Limitamos a 1000 cars por seguridad
+      });
+
+      if (!response.ok) throw new Error("Error en TTS");
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.play();
+    } catch (e) {
+      console.error("ElevenLabs Error, falling back to browser synth:", e);
+      // Fallback
+      if (synth.speaking) synth.cancel();
+      const utter = new SpeechSynthesisUtterance(textToSpeak);
+      utter.lang = 'es-ES';
+      
+      // Attempt best spanish voice
+      const voices = synth.getVoices();
+      const optimalVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Sabina')));
+      if (optimalVoice) utter.voice = optimalVoice;
+
+      utter.rate = 1.05;
+      utter.pitch = 1.0;
+      synth.speak(utter);
     }
-    const utterThis = new SpeechSynthesisUtterance(textToSpeak);
-    utterThis.lang = 'es-ES';
-    
-    // Attempt best spanish voice
-    const voices = synth.getVoices();
-    const optimalVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Sabina')));
-    if (optimalVoice) utterThis.voice = optimalVoice;
-
-    utterThis.rate = 1.05;
-    utterThis.pitch = 1.0;
-    synth.speak(utterThis);
   };
 
   const fetchSessionsList = async () => {
@@ -355,11 +371,15 @@ function App() {
                    </div>
                    {projectSessions.map(sess => (
                      <div 
-                        key={sess.id} 
-                        className={`nav-item ${sess.id === currentSessionId && currentView === 'chat' ? 'active' : ''}`}
-                        onClick={() => { setCurrentSessionId(sess.id); setCurrentView('chat'); }}
-                        style={{ fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                      >
+                       key={sess.id} 
+                       className={`session-item ${currentSessionId === sess.id ? 'active' : ''}`}
+                       onClick={() => {
+                         setCurrentSessionId(sess.id);
+                         setCurrentView('chat');
+                         setIsSidebarOpen(false); // Cierra menú al elegir sesión en movil
+                       }}
+                       style={{ fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                     >
                         <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={`${sess.title} (${new Date(sess.createdAt).toLocaleDateString()})`}>
                           <span>💬</span> {sess.title}
                         </div>

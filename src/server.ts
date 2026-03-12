@@ -2,10 +2,54 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
+import 'dotenv/config';
 import { processUserMessage } from './agent/loop.js';
 import { getConversationHistory, clearHistory, getSessionsList } from './memory/firebase.js';
 
 const app = express();
+
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const DEFAULT_VOICE_ID = 'pNInz6obpgmqM0pL7ZEi'; // Adam o una voz similar
+
+// TTS Endpoint
+app.post('/api/tts', async (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: 'No text provided' });
+    if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ElevenLabs API Key not configured' });
+
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${DEFAULT_VOICE_ID}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'xi-api-key': ELEVENLABS_API_KEY
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json();
+      throw new Error(errData.detail?.message || 'Error calling ElevenLabs');
+    }
+
+    const audioBuffer = await response.arrayBuffer();
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.byteLength
+    });
+    res.send(Buffer.from(audioBuffer));
+  } catch (error: any) {
+    console.error('TTS Error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Middlewares
 app.use(cors());

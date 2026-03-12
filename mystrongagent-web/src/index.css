@@ -39,8 +39,12 @@ body {
 .app-container {
   display: flex;
   height: 100vh;
+  height: 100dvh; /* Dynamic viewport height for mobile browsers */
   width: 100vw;
   overflow: hidden;
+  position: fixed; /* Prevent body scroll on mobile */
+  top: 0;
+  left: 0;
 }
 
 /* ... SIDEBAR (queda igual) ... */
@@ -517,14 +521,17 @@ body {
 @media (max-width: 768px) {
   .app-container {
     flex-direction: column;
-    position: relative;
-    overflow: hidden;
+    height: 100dvh;
   }
   
   .hamburger-btn {
-    display: inline-block;
-    z-index: 60; /* Asegurarse de que sea clickeable por encima del header */
-    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    width: 40px;
+    height: 40px;
+    font-size: 2rem;
   }
   
   .chat-header {
@@ -535,14 +542,16 @@ body {
   }
   
   .sidebar {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: -100%;
-    width: 280px;
-    height: 100vh;
-    transition: left 0.3s ease-in-out;
-    z-index: 50;
+    width: 80%;
+    max-width: 300px;
+    height: 100dvh;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 200;
     display: flex;
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
   }
   
   .sidebar.open {
@@ -551,28 +560,42 @@ body {
   
   .mobile-overlay {
     display: block;
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
-    height: 100vh;
-    background: rgba(0,0,0,0.5);
-    z-index: 40;
-    backdrop-filter: blur(2px);
+    height: 100dvh;
+    background: rgba(0,0,0,0.7);
+    z-index: 150;
+    backdrop-filter: blur(4px);
   }
 
   .chat-area {
-    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
     width: 100vw;
+    overflow: hidden;
+  }
+
+  .chat-header {
+    flex-shrink: 0;
+    height: 70px;
   }
 
   .messages-container {
-    padding: 20px;
-    height: calc(100vh - 160px); /* Ajuste de scroll considerando header e input */
+    flex-grow: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 15px;
+    padding-bottom: 20px;
   }
+
   .input-area {
-    padding: 0 16px 20px;
-    background: var(--bg-dark); /* Evita transparencia molesta en movil */
+    flex-shrink: 0;
+    padding: 10px 16px 30px; /* Mas espacio abajo por el teclado de movil */
+    background: #0f0c29; 
+    z-index: 10;
   }
   .message-bubble-container {
     max-width: 85%;
