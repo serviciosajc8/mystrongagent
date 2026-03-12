@@ -8,7 +8,7 @@ import os from 'os';
 
 // Config & Agent Imports
 import { processUserMessage } from './agent/loop.js';
-import { getConversationHistory, clearHistory, getSessionsList, renameSession, updateSession } from './memory/firebase.js';
+import { saveMessage, getConversationHistory, getSessionsList, renameSession, clearHistory, updateSession, saveToBoveda as saveBovedaFB, getBovedaFiles, readBovedaFile } from './memory/firebase.js';
 import { generateCompletion, processAudio } from './agent/llm.js';
 
 const app = express();
@@ -181,41 +181,31 @@ app.post('/api/boveda/save', async (req, res) => {
     const { content, projectName } = req.body;
     if(!content || !projectName) return res.status(400).json({ success: false, error: 'Faltan campos' });
 
-    const bovedaPath = path.join(process.cwd(), 'boveda_conocimiento');
-    if (!fs.existsSync(bovedaPath)) fs.mkdirSync(bovedaPath, { recursive: true });
+    const safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_') + ".md";
+    await saveBovedaFB(safeName, content);
 
-    const safeName = projectName.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const filePath = path.join(bovedaPath, `${safeName}.md`);
-    fs.writeFileSync(filePath, content, 'utf-8');
-
-    res.json({ success: true, message: `Guardado en Bóveda: ${safeName}.md` });
+    res.json({ success: true, message: `Guardado en Bóveda: ${safeName}` });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // API: Listar Bóveda
-app.get('/api/boveda/list', (req, res) => {
+app.get('/api/boveda/list', async (req, res) => {
   try {
-    const bovedaPath = path.join(process.cwd(), 'boveda_conocimiento');
-    if (!fs.existsSync(bovedaPath)) return res.json({ success: true, files: [] });
-    const files = fs.readdirSync(bovedaPath).filter(f => f.endsWith('.md') || f.endsWith('.txt'));
-    const fileData = files.map(filename => {
-       const stat = fs.statSync(path.join(bovedaPath, filename));
-       return { name: filename, modified: stat.mtime };
-    }).sort((a,b) => b.modified.getTime() - a.modified.getTime());
-    res.json({ success: true, files: fileData });
+    const files = await getBovedaFiles();
+    res.json({ success: true, files: files });
   } catch(error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // API: Leer Bóveda
-app.get('/api/boveda/read/:filename', (req, res) => {
+app.get('/api/boveda/read/:filename', async (req, res) => {
   try {
-    const filePath = path.join(process.cwd(), 'boveda_conocimiento', req.params.filename);
-    if (!fs.existsSync(filePath)) return res.status(404).json({ success: false, error: 'No encontrado' });
-    res.json({ success: true, content: fs.readFileSync(filePath, 'utf-8') });
+    const content = await readBovedaFile(req.params.filename);
+    if (content === null) return res.status(404).json({ success: false, error: 'No encontrado' });
+    res.json({ success: true, content });
   } catch(error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

@@ -117,41 +117,39 @@ export async function renameSession(sessionId: string, title: string) {
 export async function getSessionsList() {
   try {
     const db = getDB();
-    
-    // Extraer timestamps del primer mensaje de la sesión
-    const messagesCol = collection(db, 'messages');
-    const snapshot = await getDocs(messagesCol);
-    
-    const sessionsMap = new Map<string, { id: string, timestamp: string }>();
-    snapshot.docs.forEach(doc => {
-      const data = doc.data();
-      if (data.sessionId) {
-        if (!sessionsMap.has(data.sessionId)) {
-          sessionsMap.set(data.sessionId, { id: data.sessionId, timestamp: data.timestamp || '' });
-        } else {
-          const current = sessionsMap.get(data.sessionId)!;
-          if (data.timestamp && data.timestamp < current.timestamp) {
-             current.timestamp = data.timestamp;
-          }
-        }
-      }
-    });
-    
-    // Obtener los títulos y proyectos de la colección 'sessions'
+    if (!db) return [];
+
+    // 1. Obtener todas las sesiones de la colección 'sessions' (fuente de verdad)
     const sessionsCol = collection(db, 'sessions');
     const sessionsSnap = await getDocs(sessionsCol);
-    const metaMap = new Map<string, any>();
-    sessionsSnap.docs.forEach(doc => {
-      metaMap.set(doc.id, doc.data());
-    });
+    
+    // 2. Si no hay sesiones en la colección, intentamos recuperar IDs de los mensajes (para compatibilidad)
+    if (sessionsSnap.empty) {
+      console.log("Colección 'sessions' vacía, buscando IDs en mensajes...");
+      const messagesCol = collection(db, 'messages');
+      const msgSnap = await getDocs(messagesCol);
+      const tempMap = new Map();
+      msgSnap.docs.forEach(d => {
+        const data = d.data();
+        if (data.sessionId && !tempMap.has(data.sessionId)) {
+          tempMap.set(data.sessionId, { 
+            id: data.sessionId, 
+            title: data.sessionId, 
+            createdAt: data.timestamp || new Date().toISOString() 
+          });
+        }
+      });
+      return Array.from(tempMap.values()).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+    }
 
-    let result = Array.from(sessionsMap.values()).map(sess => {
-      const meta = metaMap.get(sess.id) || {};
+    // 3. Formatear resultados desde la colección de sesiones
+    let result = sessionsSnap.docs.map(doc => {
+      const data = doc.data();
       return {
-        id: sess.id,
-        title: meta.title || sess.id,
-        projectId: meta.projectId || null,
-        createdAt: meta.createdAt || sess.timestamp || new Date().toISOString()
+        id: doc.id,
+        title: data.title || doc.id,
+        projectId: data.projectId || null,
+        createdAt: data.createdAt || new Date().toISOString()
       };
     });
     
@@ -181,5 +179,58 @@ export async function clearHistory(sessionId: string) {
     await Promise.all(deletePromises);
   } catch(error) {
     console.error("Error al limpiar historial de firebase:", error);
+  }
+}
+
+// --- BOVEDA DE CONOCIMIENTO (PERSISTENTE) ---
+
+export async function saveToBoveda(name: string, content: string) {
+  try {
+    const db = getDB();
+    if (!db) return;
+    const bovedaCol = collection(db, 'boveda');
+    // Usamos el nombre como ID para fácil acceso
+    await setDoc(doc(db, 'boveda', name), {
+      name,
+      content,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error al guardar en boveda firebase:", error);
+  }
+}
+
+export async function getBovedaFiles() {
+  try {
+    const db = getDB();
+    if (!db) return [];
+    const bovedaCol = collection(db, 'boveda');
+    const snapshot = await getDocs(bovedaCol);
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        name: data.name || doc.id,
+        modified: data.updatedAt || new Date().toISOString()
+      };
+    }).sort((a,b) => b.modified.localeCompare(a.modified));
+  } catch (error) {
+    console.error("Error al listar boveda firebase:", error);
+    return [];
+  }
+}
+
+export async function readBovedaFile(name: string) {
+  try {
+    const db = getDB();
+    if (!db) return null;
+    const docRef = doc(db, 'boveda', name);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data().content;
+    }
+    return null;
+  } catch (error) {
+    console.error("Error al leer boveda firebase:", error);
+    return null;
   }
 }

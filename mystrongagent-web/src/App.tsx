@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { v4 as uuidv4 } from 'uuid';
+import AudioWaveform from './components/AudioWaveform';
 import './index.css';
 
 interface Message {
@@ -34,6 +35,7 @@ function App() {
   const [currentView, setCurrentView] = useState<'chat' | 'boveda'>('chat');
   const [bovedaFiles, setBovedaFiles] = useState<any[]>([]);
   const [bovedaPreview, setBovedaPreview] = useState<{name: string, content: string} | null>(null);
+  const [activeAudio, setActiveAudio] = useState<string | null>(null);
 
   const API_URL = import.meta.env.PROD 
     ? '/api' 
@@ -142,8 +144,7 @@ function App() {
 
       const audioBlob = await response.blob();
       const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-      audio.play();
+      setActiveAudio(audioUrl);
     } catch (e) {
       console.error("ElevenLabs Error:", e);
       // Fallback simple si la API falla
@@ -161,14 +162,15 @@ function App() {
       if (data.success && data.sessions) {
         setSessions(data.sessions);
         if (data.sessions.length > 0) {
-          setCurrentSessionId(data.sessions[0].id);
+          // No cambiar automáticamente la sesión si ya hay una activa
+          if (!currentSessionId) setCurrentSessionId(data.sessions[0].id);
         } else {
           startNewSession();
         }
       }
     } catch (e) {
       console.error(e);
-      startNewSession();
+      if (!currentSessionId) startNewSession();
     }
   };
 
@@ -226,6 +228,31 @@ function App() {
     } catch(err) {
       console.error(err);
     }
+  };
+
+  const addManualProject = () => {
+    const projName = window.prompt("Nombre del nuevo Proyecto / Carpeta:");
+    if (!projName?.trim()) return;
+    
+    // Creamos una sesión "fantasma" o simplemente actualizamos el mapa local
+    const dummySession: any = {
+      id: uuidv4(),
+      title: "Nueva conversación en " + projName,
+      projectId: projName.trim(),
+      createdAt: new Date().toISOString()
+    };
+    
+    setSessions(prev => [dummySession, ...prev]);
+    setCurrentSessionId(dummySession.id);
+    setCurrentView('chat');
+    setMessages([]);
+    
+    // Guardar la sesión inicial en el servidor para que persista el proyecto
+    fetch(`${API_URL}/sessions/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: dummySession.id, title: dummySession.title, projectId: dummySession.projectId })
+    });
   };
 
   const loadBoveda = async () => {
@@ -360,6 +387,9 @@ function App() {
           </div>
 
           <div className="nav-section-title">HISTORIAL (Agrupado)</div>
+          <button className="btn-add-project" onClick={addManualProject}>
+            + Crear Nuevo Proyecto
+          </button>
           <div className="sessions-list" style={{ overflowY: 'auto', maxHeight: '250px' }}>
             {Array.from(new Set(sessions.map(s => s.projectId || 'Sin Proyecto'))).sort().map(projName => {
                const projectSessions = sessions.filter(s => (s.projectId || 'Sin Proyecto') === projName && (s.title.toLowerCase().includes(searchQuery.toLowerCase()) || new Date(s.createdAt).toLocaleDateString().includes(searchQuery)));
@@ -466,9 +496,6 @@ function App() {
                       >
                         🔊 Escuchar
                       </button>
-                      <button className="boveda-btn" onClick={() => saveToBoveda(msg.content || '')}>
-                        📁 Guardar en Bóveda
-                      </button>
                     </div>
                   )}
                 </div>
@@ -478,7 +505,7 @@ function App() {
           {loading && (
             <div className="message-wrapper assistant">
                <div className="message-bubble-container">
-                <div className="message-bubble typing-indicator">
+                <div className="message-bubble">
                   <span></span><span></span><span></span>
                 </div>
               </div>
@@ -486,6 +513,13 @@ function App() {
           )}
           <div ref={messagesEndRef} />
         </div>
+
+        {activeAudio && (
+          <AudioWaveform 
+            audioUrl={activeAudio} 
+            onClose={() => setActiveAudio(null)} 
+          />
+        )}
 
         <div className="input-area">
           <form onSubmit={sendMessage} className="input-form">
