@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+service-account.json
+memory.db
+
+# Protecciones de Privacidad Absoluta para el Usuario
+boveda_conocimiento/
+img/
+mystrongagent-web/dist/
+.env*
+takeout*.zip
+*.log
