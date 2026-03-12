@@ -340,13 +340,24 @@ function App() {
           </div>
           
           <div className="nav-section-title" style={{ marginTop: '1rem' }}>BÚSQUEDA</div>
-          <input 
-            type="text" 
-            placeholder="Buscar tema o fecha..." 
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #444', background: '#222', color: '#fff', marginBottom: '1rem' }}
-          />
+          <div className="search-container">
+            <input 
+              type="text" 
+              className="search-input"
+              placeholder="Buscar tema o fecha..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button 
+                className="search-clear" 
+                onClick={() => setSearchQuery('')}
+                title="Limpiar búsqueda"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
           <div className="nav-section-title">HISTORIAL (Agrupado)</div>
           <div className="sessions-list" style={{ overflowY: 'auto', maxHeight: '250px' }}>

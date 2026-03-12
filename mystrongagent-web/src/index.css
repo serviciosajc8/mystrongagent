@@ -99,6 +99,51 @@ body {
   margin: 16px 0 8px 12px;
 }
 
+.search-container {
+  position: relative;
+  margin-bottom: 1rem;
+  padding: 0 4px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 30px 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bg-panel-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--c-pink);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 10px rgba(255, 102, 166, 0.2);
+}
+
+.search-clear {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+}
+
+.search-clear:hover {
+  color: var(--c-pink);
+}
+
 .nav-item {
   display: flex;
   align-items: center;
