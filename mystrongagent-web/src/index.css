@@ -24,6 +24,13 @@
   padding: 0;
 }
 
+html, body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
 body {
   font-family: 'Outfit', sans-serif;
   background-color: var(--bg-dark);
@@ -33,7 +40,6 @@ body {
     radial-gradient(circle at 85% 30%, rgba(255, 102, 166, 0.12), transparent 25%),
     radial-gradient(circle at 50% 80%, rgba(249, 224, 118, 0.08), transparent 20%);
   background-attachment: fixed;
-  overflow: hidden;
 }
 
 .app-container {
@@ -243,15 +249,16 @@ body {
   display: flex;
   flex-direction: column;
   position: relative;
+  height: 100%;
+  overflow: hidden; /* Crucial para evitar que el contenedor ruede hacia arriba */
 }
 
 .chat-header {
-  padding: 24px 40px;
+  padding: 18px 40px; /* Un poco menos de padding vertical */
   border-bottom: 1px solid var(--bg-panel-border);
-  background: rgba(15, 12, 27, 0.4);
-  backdrop-filter: blur(10px);
-  position: sticky;
-  top: 0;
+  background: rgba(15, 12, 27, 0.6);
+  backdrop-filter: blur(20px);
+  flex-shrink: 0; /* No se encoge */
   z-index: 5;
 }
 
