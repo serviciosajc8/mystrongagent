@@ -13,6 +13,8 @@
     "build": "tsc && cd mystrongagent-web && npm install && npm run build"
   },
   "dependencies": {
+    "axios": "^1.13.6",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.6",
     "dotenv": "^16.4.7",
     "express": "^5.2.1",

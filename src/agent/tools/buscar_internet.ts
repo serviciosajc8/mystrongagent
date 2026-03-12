@@ -46,10 +46,10 @@ export const buscarInternet = {
 
       // 3. Si no hay nada de nada
       if (!result || result.length < 20) {
-        return `No se encontraron resultados directos para "${query}". \nSugerencia Interna: Intenta una búsqueda con palabras más simples o verifica la ortografía. Si es un evento muy reciente (hace minutos), puede que la caché no se haya actualizado.`;
+        return `No se encontraron resultados directos para "${query}". \nSugerencia Interna: Intenta una búsqueda con palabras más simples. Si necesitas profundizar en una página específica, usa 'leer_url'.`;
       }
 
-      return result;
+      return result + "\nNOTA: Si alguno de estos resultados parece relevante pero incompleto, usa 'leer_url' con el enlace correspondiente para obtener el contenido completo.";
     } catch (error: any) {
       console.error("Error en buscar_internet:", error);
       return `Error de conexión al buscar: ${error.message}`;

@@ -3,6 +3,7 @@ import { leerBoveda } from "./leer_boveda.js";
 import { listarBoveda } from "./listar_boveda.js";
 import { generarImagen } from "./generar_imagen.js";
 import { buscarInternet } from "./buscar_internet.js";
+import { leer_url } from "./leer_url.js";
 
 // Export the tool implementations
 export const toolHandlers: Record<string, Function> = {
@@ -11,6 +12,7 @@ export const toolHandlers: Record<string, Function> = {
   listar_boveda: listarBoveda.execute,
   generar_imagen: generarImagen.execute,
   buscar_internet: buscarInternet.execute,
+  leer_url: leer_url.execute,
 };
 
 // Export the generic JSON schemas to pass to the LLM
@@ -20,4 +22,12 @@ export const toolsSchema = [
   listarBoveda.schema,
   generarImagen.schema,
   buscarInternet.schema,
+  {
+    type: "function",
+    function: {
+      name: leer_url.name,
+      description: leer_url.description,
+      parameters: leer_url.parameters
+    }
+  }
 ];

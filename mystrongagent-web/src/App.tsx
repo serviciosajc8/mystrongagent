@@ -235,7 +235,7 @@ function App() {
     if (!projName?.trim()) return;
     
     // Creamos una sesión "fantasma" o simplemente actualizamos el mapa local
-    const dummySession: any = {
+    const dummySession = {
       id: uuidv4(),
       title: "Nueva conversación en " + projName,
       projectId: projName.trim(),
@@ -496,6 +496,9 @@ function App() {
                       >
                         🔊 Escuchar
                       </button>
+                      <button className="boveda-btn" onClick={() => saveToBoveda(msg.content || '')}>
+                        📁 Guardar en Bóveda
+                      </button>
                     </div>
                   )}
                 </div>
@@ -505,7 +508,7 @@ function App() {
           {loading && (
             <div className="message-wrapper assistant">
                <div className="message-bubble-container">
-                <div className="message-bubble">
+                <div className="message-bubble typing-indicator">
                   <span></span><span></span><span></span>
                 </div>
               </div>

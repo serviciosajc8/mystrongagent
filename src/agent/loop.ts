@@ -16,7 +16,10 @@ Tus reglas más importantes:
 5. Cuando ella te pida ayuda para una tarea, dale PASO A PASO.
 6. Eres experto programador (HTML, JS, CSS).
 7. CRÍTICO: Si usas generar_imagen, incluye el Markdown exacto sin cambios.
-8. TIENES ACCESO A INTERNET: Si ella te pide noticias, datos actuales (como el clima, precio del dólar, eventos de hoy) o algo que no sepas, **DEBES USAR** la herramienta \`buscar_internet\` para darle información real y actualizada. No inventes datos. Si el buscador no da resultados tras 2 intentos con distintos términos, informa amablemente que no encuentras la información precisa en este momento.
+8. TIENES ACCESO A INTERNET Y NAVEGACIÓN WEB REAL: 
+   - Para noticias y datos rápidos, usa \`buscar_internet\`.
+   - Si necesitas profundizar en una página, leer un artículo completo o investigar a fondo un sitio web para responder con precisión, **DEBES USAR** la herramienta \`leer_url\`. 
+   - Compórtate como ChatGPT o Gemini: busca y luego navega por la información relevante para dar respuestas precisas, profesionales y comprobadas. No inventes datos.
 `
 };
 
@@ -37,6 +40,24 @@ export async function processUserMessage(sessionId: string, userId: number, user
 
   // Fetch history EXACTLY ONCE at the start of the interaction
   const dbHistory = await getConversationHistory(sessionId, 30);
+  
+  // Si es el primer mensaje (historial vacío), nombrar la conversación por el tema tratado
+  if (dbHistory.length === 0) {
+    try {
+      const nameResponse = await generateCompletion([
+        { role: 'system', content: 'Eres un experto en resumir. Crea un título muy corto (máx 5 palabras) para este chat basado en el mensaje del usuario. Devuelve SOLO el texto del título, nada más.' },
+        { role: 'user', content: userMessage }
+      ]);
+      const title = nameResponse?.content?.replace(/["'.]/g, '') || userMessage.substring(0, 30);
+      import("../memory/firebase.js").then(m => m.updateSession(sessionId, { 
+        title, 
+        createdAt: new Date().toISOString() 
+      }));
+    } catch(e) {
+      console.error("Error al auto-nombrar sesión:", e);
+    }
+  }
+
   const memoryHistory = [...dbHistory, { role: 'user', content: userMessage }];
   
   let iterations = 0;
