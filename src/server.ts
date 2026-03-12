@@ -9,7 +9,7 @@ import { getConversationHistory, clearHistory, getSessionsList } from './memory/
 const app = express();
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const DEFAULT_VOICE_ID = 'pNInz6obpgmqM0pL7ZEi'; // Adam o una voz similar
+const DEFAULT_VOICE_ID = 'N2lVS1wzUvWYK7FEAn9H'; // Voz Masculina Clara y de alta calidad (Adam)
 
 // TTS Endpoint
 app.post('/api/tts', async (req, res) => {

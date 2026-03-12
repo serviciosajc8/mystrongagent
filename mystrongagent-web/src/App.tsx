@@ -106,7 +106,7 @@ function App() {
           if (data.success && data.response && data.transcribedText) {
              setMessages(prev => [...prev, { role: 'user', content: `🎙️ ${data.transcribedText}`, timestamp: now }]);
              setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
-             speakText(data.response);
+             if (voiceEnabled) speakText(data.response);
           } else {
              setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Hubo un error al procesar tu audio: ${data.error || 'Desconocido'}`, timestamp: resNow }]);
           }
@@ -128,7 +128,6 @@ function App() {
   };
 
   const speakText = async (text: string) => {
-    if (!voiceEnabled) return;
     const textToSpeak = text.replace(/!\[.*?\]\(.*?\)/g, ' Aquí tienes la imagen solicitada. ')
                             .replace(/`{3}[\s\S]*?`{3}/g, ' Aquí hay un bloque de código. ');
 
@@ -136,7 +135,7 @@ function App() {
       const response = await fetch(`${API_URL}/tts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: textToSpeak.substring(0, 1000) }) // Limitamos a 1000 cars por seguridad
+        body: JSON.stringify({ text: textToSpeak.substring(0, 1000) }) 
       });
 
       if (!response.ok) throw new Error("Error en TTS");
@@ -146,19 +145,11 @@ function App() {
       const audio = new Audio(audioUrl);
       audio.play();
     } catch (e) {
-      console.error("ElevenLabs Error, falling back to browser synth:", e);
-      // Fallback
+      console.error("ElevenLabs Error:", e);
+      // Fallback simple si la API falla
       if (synth.speaking) synth.cancel();
       const utter = new SpeechSynthesisUtterance(textToSpeak);
-      utter.lang = 'es-ES';
-      
-      // Attempt best spanish voice
-      const voices = synth.getVoices();
-      const optimalVoice = voices.find(v => v.lang.includes('es') && (v.name.includes('Google') || v.name.includes('Microsoft') || v.name.includes('Sabina')));
-      if (optimalVoice) utter.voice = optimalVoice;
-
-      utter.rate = 1.05;
-      utter.pitch = 1.0;
+      utter.lang = 'es-MX'; // Español México
       synth.speak(utter);
     }
   };
@@ -290,7 +281,7 @@ function App() {
       const resNow = new Date().toISOString();
       if (data.success && data.response) {
         setMessages(prev => [...prev, { role: 'assistant', content: data.response, timestamp: resNow }]);
-        speakText(data.response);
+        if (voiceEnabled) speakText(data.response);
       } else {
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ Hubo un error al procesar tu mensaje: ${data.error || 'Desconocido'}`, timestamp: resNow }]);
       }
@@ -458,10 +449,13 @@ function App() {
                   {msg.role === 'assistant' && msg.content && !msg.content.includes("Hubo un error") && (
                     <div className="message-actions">
                       <button 
-                        className="save-btn" 
-                        onClick={() => saveToBoveda(msg.content!)}
-                        title="Guardar como proyecto en tu Bóveda local"
+                        className="boveda-btn" 
+                        onClick={() => msg.content && speakText(msg.content)}
+                        title="Escuchar mensaje"
                       >
+                        🔊 Escuchar
+                      </button>
+                      <button className="boveda-btn" onClick={() => saveToBoveda(msg.content || '')}>
                         📁 Guardar en Bóveda
                       </button>
                     </div>
