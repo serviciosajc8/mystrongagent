@@ -42,10 +42,17 @@ export async function processUserMessage(sessionId: string, userId: number, user
     iterations++;
     
     // Build context
-    const history = [SYSTEM_PROMPT, ...memoryHistory];
+    const history = [SYSTEM_PROMPT, ...memoryHistory.map(m => {
+      const cleanMsg: any = { role: m.role };
+      if (m.content !== undefined) cleanMsg.content = m.content;
+      if (m.name) cleanMsg.name = m.name;
+      if (m.tool_calls) cleanMsg.tool_calls = m.tool_calls;
+      if (m.tool_call_id) cleanMsg.tool_call_id = m.tool_call_id;
+      return cleanMsg;
+    })];
 
     // Call LLM
-    const responseMessage = await generateCompletion(history, toolsSchema);
+    const responseMessage = await generateCompletion(history as any, toolsSchema);
     
     if (!responseMessage) {
       return "Lo siento, ha ocurrido un error al procesar la respuesta.";
