@@ -15,10 +15,12 @@ app.use(express.json());
 app.get('/api/sessions', async (req, res) => {
   try {
     const sessions = await getSessionsList();
-    // Default session if none exists
-    if (!sessions.includes('default_web_session')) {
-      sessions.unshift('default_web_session');
+    
+    // Add default session if empty
+    if (sessions.length === 0) {
+      sessions.push({ id: 'default_web_session', title: 'Nueva Conversación' });
     }
+    
     res.json({ success: true, sessions });
   } catch (error: any) {
     console.error("Error fetching sessions:", error);
@@ -38,6 +40,9 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
+import { generateCompletion } from './agent/llm.js';
+import { renameSession } from './memory/firebase.js';
+
 // API: Mandar un mensaje al agente
 app.post('/api/chat', async (req, res) => {
   try {
@@ -51,10 +56,38 @@ app.post('/api/chat', async (req, res) => {
     
     const agentResponse = await processUserMessage(sessionId, allowedUserId, message);
     
+    // Generación de título automático (sólo en el primer mensaje)
+    setTimeout(async () => {
+      try {
+        const history = await getConversationHistory(sessionId, 5);
+        if (history.length <= 4) { // Significa que es una plática nueva
+           const prompt = [
+             { role: 'system' as const, content: 'Genera un TÍTULO CORTO de 2 a 4 palabras que resuma este mensaje. Responde SOLO con el título, sin usar comillas, sin formato markdown.'},
+             { role: 'user' as const, content: message }
+           ];
+           const titleObj = await generateCompletion(prompt as any, []);
+           if (titleObj && titleObj.content) {
+              await renameSession(sessionId, titleObj.content);
+           }
+        }
+      } catch (e) {}
+    }, 100);
+
     res.json({ success: true, response: agentResponse });
   } catch (error: any) {
     console.error("Error processing chat:", error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// API: Renombrar sesión manual
+app.post('/api/sessions/rename', async (req, res) => {
+  try {
+    const { sessionId, title } = req.body;
+    await renameSession(sessionId, title);
+    res.json({ success: true, message: 'Renombrada exitosamente' });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
   }
 });
 

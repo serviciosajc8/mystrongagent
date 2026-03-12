@@ -16,7 +16,7 @@ function App() {
   const [loading, setLoading] = useState(false);
   
   // Múltiples Sesiones
-  const [sessions, setSessions] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<{id: string, title: string}[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
 
   const [isListening, setIsListening] = useState(false);
@@ -127,7 +127,7 @@ function App() {
       if (data.success && data.sessions) {
         setSessions(data.sessions);
         if (data.sessions.length > 0) {
-          setCurrentSessionId(data.sessions[0]);
+          setCurrentSessionId(data.sessions[0].id);
         } else {
           startNewSession();
         }
@@ -154,10 +154,27 @@ function App() {
   const startNewSession = () => {
     const newId = uuidv4();
     setCurrentSessionId(newId);
-    setSessions(prev => [newId, ...prev]);
+    setSessions(prev => [{id: newId, title: 'Nueva Conversación'}, ...prev]);
     setMessages([]); // Hoja en blanco
     setCurrentView('chat');
     inputRef.current?.focus();
+  };
+
+  const handleRenameSession = async (sessId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newName = window.prompt("Nuevo nombre para tu conversación:");
+    if (!newName) return;
+    
+    setSessions(prev => prev.map(s => s.id === sessId ? { ...s, title: newName } : s));
+    try {
+      await fetch(`${API_URL}/sessions/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessId, title: newName })
+      });
+    } catch(err) {
+      console.error(err);
+    }
   };
 
   const loadBoveda = async () => {
@@ -274,12 +291,15 @@ function App() {
           <div className="sessions-list" style={{ overflowY: 'auto', maxHeight: '150px' }}>
             {sessions.map(sess => (
               <div 
-                key={sess} 
-                className={`nav-item ${sess === currentSessionId && currentView === 'chat' ? 'active' : ''}`}
-                onClick={() => { setCurrentSessionId(sess); setCurrentView('chat'); }}
-                style={{ fontSize: '0.8rem', padding: '8px 14px', cursor: 'pointer' }}
+                key={sess.id} 
+                className={`nav-item ${sess.id === currentSessionId && currentView === 'chat' ? 'active' : ''}`}
+                onClick={() => { setCurrentSessionId(sess.id); setCurrentView('chat'); }}
+                style={{ fontSize: '0.8rem', padding: '8px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <span>💬</span> {sess.substring(0, 8)}...
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                  <span>💬</span> {sess.title}
+                </div>
+                <button onClick={(e) => handleRenameSession(sess.id, e)} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', marginLeft: '5px' }}>✏️</button>
               </div>
             ))}
           </div>

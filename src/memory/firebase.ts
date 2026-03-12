@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, where } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, where, setDoc, getDoc } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDJMusKgD3fXc7b-KOmn1tJK2bz2C4joJo",
@@ -93,19 +93,43 @@ export async function getConversationHistory(sessionId: string, limitNum: number
   }
 }
 
+export async function renameSession(sessionId: string, title: string) {
+  try {
+    const db = getDB();
+    await setDoc(doc(db, 'sessions', sessionId), { title }, { merge: true });
+  } catch (error) {
+    console.error("Error renombrando sesion:", error);
+  }
+}
+
 export async function getSessionsList() {
   try {
     const db = getDB();
+    
+    // Lista de Unique Session IDs a partir de messages
     const messagesCol = collection(db, 'messages');
     const snapshot = await getDocs(messagesCol);
     
-    const sessions = new Set<string>();
+    const sessionIds = new Set<string>();
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      if (data.sessionId) sessions.add(data.sessionId);
+      if (data.sessionId) sessionIds.add(data.sessionId);
     });
     
-    return Array.from(sessions);
+    // Obtener los títulos de la colección 'sessions'
+    const sessionsCol = collection(db, 'sessions');
+    const sessionsSnap = await getDocs(sessionsCol);
+    const titlesMap = new Map<string, string>();
+    sessionsSnap.docs.forEach(doc => {
+      titlesMap.set(doc.id, doc.data().title);
+    });
+
+    const result = Array.from(sessionIds).map(id => ({
+      id,
+      title: titlesMap.get(id) || id
+    }));
+
+    return result;
   } catch (error) {
     console.error("Error obteniendo lista de sesiones:", error);
     return [];
