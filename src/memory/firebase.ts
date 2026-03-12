@@ -93,41 +93,62 @@ export async function getConversationHistory(sessionId: string, limitNum: number
   }
 }
 
-export async function renameSession(sessionId: string, title: string) {
+export async function updateSession(sessionId: string, data: { title?: string, projectId?: string, createdAt?: string }) {
   try {
     const db = getDB();
-    await setDoc(doc(db, 'sessions', sessionId), { title }, { merge: true });
+    await setDoc(doc(db, 'sessions', sessionId), data, { merge: true });
   } catch (error) {
-    console.error("Error renombrando sesion:", error);
+    console.error("Error actualizando sesion:", error);
   }
+}
+
+export async function renameSession(sessionId: string, title: string) {
+  return updateSession(sessionId, { title });
 }
 
 export async function getSessionsList() {
   try {
     const db = getDB();
     
-    // Lista de Unique Session IDs a partir de messages
+    // Extraer timestamps del primer mensaje de la sesión
     const messagesCol = collection(db, 'messages');
     const snapshot = await getDocs(messagesCol);
     
-    const sessionIds = new Set<string>();
+    const sessionsMap = new Map<string, { id: string, timestamp: string }>();
     snapshot.docs.forEach(doc => {
       const data = doc.data();
-      if (data.sessionId) sessionIds.add(data.sessionId);
+      if (data.sessionId) {
+        if (!sessionsMap.has(data.sessionId)) {
+          sessionsMap.set(data.sessionId, { id: data.sessionId, timestamp: data.timestamp || '' });
+        } else {
+          const current = sessionsMap.get(data.sessionId)!;
+          if (data.timestamp && data.timestamp < current.timestamp) {
+             current.timestamp = data.timestamp;
+          }
+        }
+      }
     });
     
-    // Obtener los títulos de la colección 'sessions'
+    // Obtener los títulos y proyectos de la colección 'sessions'
     const sessionsCol = collection(db, 'sessions');
     const sessionsSnap = await getDocs(sessionsCol);
-    const titlesMap = new Map<string, string>();
+    const metaMap = new Map<string, any>();
     sessionsSnap.docs.forEach(doc => {
-      titlesMap.set(doc.id, doc.data().title);
+      metaMap.set(doc.id, doc.data());
     });
 
-    const result = Array.from(sessionIds).map(id => ({
-      id,
-      title: titlesMap.get(id) || id
-    }));
+    let result = Array.from(sessionsMap.values()).map(sess => {
+      const meta = metaMap.get(sess.id) || {};
+      return {
+        id: sess.id,
+        title: meta.title || sess.id,
+        projectId: meta.projectId || null,
+        createdAt: meta.createdAt || sess.timestamp || new Date().toISOString()
+      };
+    });
+    
+    // Ordenar de más reciente a más antiguo
+    result.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 
     return result;
   } catch (error) {

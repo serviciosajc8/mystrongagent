@@ -18,7 +18,7 @@ app.get('/api/sessions', async (req, res) => {
     
     // Add default session if empty
     if (sessions.length === 0) {
-      sessions.push({ id: 'default_web_session', title: 'Nueva Conversación' });
+      sessions.push({ id: 'default_web_session', title: 'Nueva Conversación', projectId: null, createdAt: new Date().toISOString() });
     }
     
     res.json({ success: true, sessions });
@@ -41,7 +41,18 @@ app.get('/api/history', async (req, res) => {
 });
 
 import { generateCompletion } from './agent/llm.js';
-import { renameSession } from './memory/firebase.js';
+import { renameSession, updateSession } from './memory/firebase.js';
+
+// API: Actualizar meta de sesión (Renombrar, mover de proyecto)
+app.post('/api/sessions/update', async (req, res) => {
+  try {
+    const { sessionId, title, projectId } = req.body;
+    await updateSession(sessionId, { title, projectId });
+    res.json({ success: true, message: 'Actualizada exitosamente' });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
 
 // API: Mandar un mensaje al agente
 app.post('/api/chat', async (req, res) => {
@@ -82,16 +93,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// API: Renombrar sesión manual
-app.post('/api/sessions/rename', async (req, res) => {
-  try {
-    const { sessionId, title } = req.body;
-    await renameSession(sessionId, title);
-    res.json({ success: true, message: 'Renombrada exitosamente' });
-  } catch (e: any) {
-    res.status(500).json({ success: false, error: e.message });
-  }
-});
+// Quitado, reemplazado por /update más arriba
 
 // API: Limpiar la bóveda de memoria de UNA sesión en específico
 app.delete('/api/history', async (req, res) => {

@@ -14,10 +14,10 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  // Múltiples Sesiones
-  const [sessions, setSessions] = useState<{id: string, title: string}[]>([]);
+  // Múltiples Sesiones y Proyectos
+  const [sessions, setSessions] = useState<{id: string, title: string, projectId: string | null, createdAt: string}[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [isListening, setIsListening] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
@@ -154,7 +154,7 @@ function App() {
   const startNewSession = () => {
     const newId = uuidv4();
     setCurrentSessionId(newId);
-    setSessions(prev => [{id: newId, title: 'Nueva Conversación'}, ...prev]);
+    setSessions(prev => [{id: newId, title: 'Nueva Conversación', projectId: null, createdAt: new Date().toISOString()}, ...prev]);
     setMessages([]); // Hoja en blanco
     setCurrentView('chat');
     inputRef.current?.focus();
@@ -167,10 +167,27 @@ function App() {
     
     setSessions(prev => prev.map(s => s.id === sessId ? { ...s, title: newName } : s));
     try {
-      await fetch(`${API_URL}/sessions/rename`, {
+      await fetch(`${API_URL}/sessions/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessId, title: newName })
+      });
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  const handleSetProject = async (sessId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const newProject = window.prompt("Escribe el nombre del PROYECTO (Carpeta) para agruparlo o déjalo en blanco para sacarlo:");
+    const finalProject = newProject?.trim() ? newProject.trim() : null;
+    
+    setSessions(prev => prev.map(s => s.id === sessId ? { ...s, projectId: finalProject } : s));
+    try {
+      await fetch(`${API_URL}/sessions/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessId, projectId: finalProject })
       });
     } catch(err) {
       console.error(err);
@@ -287,21 +304,46 @@ function App() {
             <span>➕</span> Nueva Conversación
           </div>
           
-          <div className="nav-section-title">HISTORIAL</div>
-          <div className="sessions-list" style={{ overflowY: 'auto', maxHeight: '150px' }}>
-            {sessions.map(sess => (
-              <div 
-                key={sess.id} 
-                className={`nav-item ${sess.id === currentSessionId && currentView === 'chat' ? 'active' : ''}`}
-                onClick={() => { setCurrentSessionId(sess.id); setCurrentView('chat'); }}
-                style={{ fontSize: '0.8rem', padding: '8px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-              >
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                  <span>💬</span> {sess.title}
-                </div>
-                <button onClick={(e) => handleRenameSession(sess.id, e)} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', marginLeft: '5px' }}>✏️</button>
-              </div>
-            ))}
+          <div className="nav-section-title" style={{ marginTop: '1rem' }}>BÚSQUEDA</div>
+          <input 
+            type="text" 
+            placeholder="Buscar tema o fecha..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ width: '100%', padding: '5px', borderRadius: '4px', border: '1px solid #444', background: '#222', color: '#fff', marginBottom: '1rem' }}
+          />
+
+          <div className="nav-section-title">HISTORIAL (Agrupado)</div>
+          <div className="sessions-list" style={{ overflowY: 'auto', maxHeight: '250px' }}>
+            {Array.from(new Set(sessions.map(s => s.projectId || 'Sin Proyecto'))).sort().map(projName => {
+               const projectSessions = sessions.filter(s => (s.projectId || 'Sin Proyecto') === projName && (s.title.toLowerCase().includes(searchQuery.toLowerCase()) || new Date(s.createdAt).toLocaleDateString().includes(searchQuery)));
+               
+               if (projectSessions.length === 0) return null;
+
+               return (
+                 <div key={projName} style={{ marginBottom: '10px' }}>
+                   <div style={{ fontSize: '0.75rem', color: '#888', textTransform: 'uppercase', marginBottom: '4px', display: 'flex', alignItems: 'center' }}>
+                     <span style={{ marginRight: '5px' }}>📁</span> {projName}
+                   </div>
+                   {projectSessions.map(sess => (
+                     <div 
+                        key={sess.id} 
+                        className={`nav-item ${sess.id === currentSessionId && currentView === 'chat' ? 'active' : ''}`}
+                        onClick={() => { setCurrentSessionId(sess.id); setCurrentView('chat'); }}
+                        style={{ fontSize: '0.8rem', padding: '6px 14px', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                      >
+                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }} title={`${sess.title} (${new Date(sess.createdAt).toLocaleDateString()})`}>
+                          <span>💬</span> {sess.title}
+                        </div>
+                        <div>
+                          <button onClick={(e) => handleSetProject(sess.id, e)} style={{ background: 'transparent', border: 'none', color: '#555', cursor: 'pointer', fontSize: '10px' }} title="Mover a Proyecto">🏷️</button>
+                          <button onClick={(e) => handleRenameSession(sess.id, e)} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer', marginLeft: '2px', fontSize: '10px' }} title="Renombrar">✏️</button>
+                        </div>
+                      </div>
+                   ))}
+                 </div>
+               );
+            })}
           </div>
 
           <div className="nav-section-title">PROYECTOS Y DOCUMENTOS</div>
