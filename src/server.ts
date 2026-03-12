@@ -139,9 +139,22 @@ app.get('/api/boveda/read/:filename', (req, res) => {
 const distPath = path.join(process.cwd(), 'mystrongagent-web', 'dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+  // Fallback Catch-all para SPA (Sin usar '*' que rompe express v5)
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      res.sendFile(path.join(distPath, 'index.html'));
+    } else {
+      next();
+    }
+  });
 } else {
-  app.get('*', (req, res) => res.send("La UI de React no se ha compilado o no está en /dist. Si estás en Dev, por favor corre el servidor de Vite en el puerto 5173."));
+  app.use((req, res, next) => {
+    if (req.method === 'GET' && !req.path.startsWith('/api')) {
+      res.send("La UI de React no se ha compilado o no está en /dist. Si estás en Dev, por favor corre el servidor de Vite en el puerto 5173.");
+    } else {
+       next();
+    }
+  });
 }
 
 export function startServer() {
