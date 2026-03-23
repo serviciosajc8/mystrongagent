@@ -96,7 +96,12 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
   
   if (openRouter) {
     try {
-      const model = useFallback ? env.OPENROUTER_MODEL : "google/gemini-2.0-flash-exp:free";
+      // Intentar primero con el modelo gratuito más rápido (Gemini 2.0 Flash)
+      const primaryModel = "google/gemini-2.0-flash-exp:free";
+      const secondaryModel = "meta-llama/llama-3.1-405b-instruct:free";
+      
+      const model = useFallback ? secondaryModel : primaryModel;
+      
       console.log(`[LLM] Intentando con OpenRouter (${model})...`);
       const response = await openRouter.chat.completions.create({
         model: model,
@@ -112,8 +117,9 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
     } catch (error: any) {
       console.error("OpenRouter API error:", error.message);
       
-      // Si es el primer intento con OpenRouter (usando el modelo rápido), intentar con el modelo principal
-      if (!useFallback) {
+      // Si el primer modelo de OpenRouter falla por saturación (429), intentar con el secundario
+      if (!useFallback && (error.status === 429 || error.message?.includes("429"))) {
+         console.log("[LLM] OpenRouter Primary saturado, intentando modelo secundario...");
          return generateCompletion(messages, tools, true);
       }
 
