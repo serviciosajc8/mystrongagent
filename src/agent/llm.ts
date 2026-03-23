@@ -46,6 +46,48 @@ const GROQ_MODELS = [
   "mixtral-8x7b-32768",
 ];
 
+let cachedFreeModels: string[] = [];
+let lastCacheUpdate = 0;
+
+async function getBestFreeModel(): Promise<string> {
+  // Solo actualizar el cache cada 1 hora para no saturar la API
+  if (cachedFreeModels.length > 0 && Date.now() - lastCacheUpdate < 3600000) {
+    return cachedFreeModels[0];
+  }
+
+  try {
+    console.log("[LLM] Buscando mejores modelos gratuitos en OpenRouter...");
+    const response = await fetch("https://openrouter.ai/api/v1/models");
+    const data: any = await response.json();
+    
+    // Filtrar modelos gratuitos (prompt y completion cost = 0)
+    const freeModels = data.data
+      .filter((m: any) => m.pricing && m.pricing.prompt === "0")
+      .map((m: any) => m.id);
+
+    // Priorizar modelos específicos si existen en la lista de gratis
+    const priority = ["google/gemini-2.0-flash-exp:free", "google/gemini", "anthropic/claude-3-haiku:free", "meta-llama/llama-3.1-70b-instruct:free"];
+    const sorted = freeModels.sort((a: any, b: any) => {
+      const idxA = priority.findIndex(p => a.includes(p));
+      const idxB = priority.findIndex(p => b.includes(p));
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return 0;
+    });
+
+    if (sorted.length > 0) {
+      cachedFreeModels = sorted;
+      lastCacheUpdate = Date.now();
+      return sorted[0];
+    }
+  } catch (e) {
+    console.error("Error auto-detecting free models:", e);
+  }
+
+  return env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
+}
+
 export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0, overrideModel?: string) {
   const formattedMessages = prepareMessages(messages);
 
@@ -116,13 +158,10 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
   
   if (openRouter) {
     try {
-      // Selección de modelos gratuitos estables en OpenRouter desde el .env
-      const primaryModel = env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
-      const secondaryModel = "google/gemini-2.0-flash-exp:free"; // Doble seguro
+      // Selección automática del mejor modelo gratuito disponible en tiempo real
+      const model = useFallback && cachedFreeModels.length > 1 ? cachedFreeModels[1] : await getBestFreeModel();
       
-      const model = useFallback ? secondaryModel : primaryModel;
-      
-      console.log(`[LLM] Intentando con OpenRouter (${model})...`);
+      console.log(`[LLM] Usando mejor modelo libre disponible: ${model}...`);
       const response = await openRouter.chat.completions.create({
         model: model,
         messages: formattedMessages,
@@ -137,9 +176,9 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
     } catch (error: any) {
       console.error("OpenRouter API error:", error.message);
       
-      // Si el primer modelo de OpenRouter falla por saturación (429), intentar con el secundario
+      // Si el primer modelo libre falla por saturación (429), intentar con el segundo de la lista auto-detectada
       if (!useFallback && (error.status === 429 || error.message?.includes("429"))) {
-         console.log("[LLM] OpenRouter Primary saturado, intentando modelo secundario...");
+         console.log("[LLM] Modelo libre saturado, saltando al siguiente de la lista detectada...");
          return generateCompletion(messages, tools, true);
       }
 
