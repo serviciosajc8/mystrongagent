@@ -90,6 +90,8 @@ export async function processUserMessage(sessionId: string, userId: number, user
       memoryHistory.push(assistantMsg);
 
       // Execute tools
+      let pendingImages: { filePath: string | null, url: string, prompt: string }[] = [];
+      
       for (const toolCall of responseMessage.tool_calls) {
         const functionName = toolCall.function.name;
         let functionArgs = {};
@@ -106,6 +108,20 @@ export async function processUserMessage(sessionId: string, userId: number, user
           try {
             const result = await toolHandlers[functionName](functionArgs);
             resultContent = String(result);
+            
+            // Detectar si es resultado de imagen
+            if (functionName === 'generar_imagen') {
+              try {
+                const parsed = JSON.parse(resultContent);
+                if (parsed.__type === 'image') {
+                  pendingImages.push({
+                    filePath: parsed.filePath,
+                    url: parsed.url,
+                    prompt: parsed.prompt
+                  });
+                }
+              } catch {}
+            }
           } catch (error) {
             console.error(`[Agent] Error executing tool ${functionName}:`, error);
             resultContent = `Error: ${error}`;
@@ -123,6 +139,19 @@ export async function processUserMessage(sessionId: string, userId: number, user
         };
         await saveMessage(sessionId, toolMsg);
         memoryHistory.push(toolMsg);
+      }
+      
+      // Si hay imágenes pendientes, devolver directamente sin pasar por el LLM
+      if (pendingImages.length > 0) {
+        let finalResponse = "";
+        for (const img of pendingImages) {
+          finalResponse += `![${img.prompt}](${img.url})\n`;
+        }
+        // Agregar el filePath como metadata especial al final (el bot la usa)
+        const imageMetaTag = `\n<!--IMAGES:${JSON.stringify(pendingImages)}-->`;
+        const fullResponse = finalResponse.trim() + imageMetaTag;
+        await saveMessage(sessionId, { role: 'assistant', content: fullResponse });
+        return fullResponse;
       }
       
       // Loop continues to generate the final completion after seeing tool outputs

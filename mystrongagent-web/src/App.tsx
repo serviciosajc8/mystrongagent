@@ -418,7 +418,7 @@ function App() {
                   <div key={idx} className={`message-wrapper ${msg.role}`}>
                     <div className="message-bubble-container">
                       <div className="message-bubble">
-                        <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                        <ReactMarkdown>{(msg.content || '').replace(/<!--IMAGES:.*?-->/s, '').trim()}</ReactMarkdown>
                         <div className="message-time">{renderTime(msg.timestamp)}</div>
                       </div>
                       {msg.role === 'assistant' && msg.content && (

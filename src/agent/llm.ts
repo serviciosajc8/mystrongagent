@@ -42,6 +42,7 @@ function prepareMessages(messages: any[]) {
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",
+  "llama3-70b-8192",
   "llama-3.1-8b-instant",
   "mixtral-8x7b-32768",
 ];
@@ -70,8 +71,10 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       
       const errorMsg = error.message?.toLowerCase() || "";
       const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
+      const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed to call a function") || errorMsg.includes("failed_generation");
 
-      if (error.status === 400 && !isDecommissioned) throw error;
+      // Solo lanzar error fatal si es un 400 que NO es de herramientas ni de modelo obsoleto
+      if (error.status === 400 && !isDecommissioned && !isToolError) throw error;
 
       if (groqModelIndex + 1 < GROQ_MODELS.length) {
         console.log(`[LLM] Reintentando con el siguiente modelo de Groq...`);

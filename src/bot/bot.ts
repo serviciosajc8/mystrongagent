@@ -1,4 +1,4 @@
-import { Bot } from "grammy";
+import { Bot, InputFile } from "grammy";
 import { env } from "../config/env.js";
 import { processUserMessage } from "../agent/loop.js";
 import { clearHistory } from "../memory/firebase.js";
@@ -17,6 +17,88 @@ function setupBot() {
 
     try {
         const newBot = new Bot(env.TELEGRAM_BOT_TOKEN);
+
+        // Función auxiliar para enviar respuestas inteligentes (detectar imágenes)
+        async function handleSmartReply(ctx: any, response: string) {
+            // Extraer metadata de imágenes si existe
+            const metaMatch = response.match(/<!--IMAGES:(.*?)-->/s);
+            let imagesMeta: { filePath: string | null, url: string, prompt: string }[] = [];
+            
+            if (metaMatch) {
+                try {
+                    imagesMeta = JSON.parse(metaMatch[1]);
+                } catch {}
+            }
+            
+            // Limpiar la respuesta de metadata y markdown de imagen
+            let cleanResponse = response
+                .replace(/<!--IMAGES:.*?-->/s, '')
+                .replace(/!\[.*?\]\(https?:\/\/.*?\)/g, '')
+                .trim();
+            
+            // Si hay imágenes detectadas en metadata, enviarlas directamente
+            if (imagesMeta.length > 0) {
+                for (const img of imagesMeta) {
+                    try {
+                        if (img.filePath && fs.existsSync(img.filePath)) {
+                            // Enviar desde archivo local (más fiable)
+                            const fileBuffer = fs.readFileSync(img.filePath);
+                            await ctx.replyWithPhoto(new InputFile(fileBuffer, 'imagen.png'), {
+                                caption: img.prompt.substring(0, 200)
+                            });
+                            // Limpiar archivo temporal
+                            try { fs.unlinkSync(img.filePath); } catch {}
+                        } else {
+                            // Fallback: enviar por URL
+                            await ctx.replyWithPhoto(img.url, {
+                                caption: img.prompt.substring(0, 200)
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error al enviar foto:", e);
+                        await ctx.reply(`🖼️ Imagen generada: ${img.url}`);
+                    }
+                }
+                
+                if (cleanResponse) {
+                    await ctx.reply(cleanResponse);
+                }
+                return;
+            }
+            
+            // Fallback original: buscar markdown de imágenes en el texto
+            const imageRegex = /!\[.*?\]\((https:\/\/.*?)\)/g;
+            let match;
+            let lastIndex = 0;
+            let foundImage = false;
+
+            while ((match = imageRegex.exec(response)) !== null) {
+                foundImage = true;
+                const textBefore = response.substring(lastIndex, match.index).trim();
+                const imageUrl = match[1];
+
+                if (textBefore) {
+                    await ctx.reply(textBefore);
+                }
+
+                try {
+                    await ctx.replyWithPhoto(imageUrl);
+                } catch (e) {
+                    console.error("Error al enviar foto por URL:", e);
+                    await ctx.reply(`🖼️ Imagen: ${imageUrl}`);
+                }
+                
+                lastIndex = imageRegex.lastIndex;
+            }
+
+            const remainingText = response.substring(lastIndex).trim();
+            if (remainingText) {
+                await ctx.reply(remainingText);
+            } else if (!foundImage && response) {
+                await ctx.reply(response);
+            }
+        }
+
 
         // Middleware to restrict access to allowed user IDs
         newBot.use(async (ctx, next) => {
@@ -53,7 +135,7 @@ function setupBot() {
                 const response = await processUserMessage(sessionId, userId, ctx.message.text);
                 
                 await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);
-                await ctx.reply(response);
+                await handleSmartReply(ctx, response);
             } catch (error: any) {
                 console.error("Error processing message:", error);
                 const errorMessage = error.message?.includes("429") 
@@ -93,7 +175,7 @@ function setupBot() {
                 const response = await processUserMessage(sessionId, userId, textToProcess);
                 
                 await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);
-                await ctx.reply(response);
+                await handleSmartReply(ctx, response);
             } catch (error: any) {
                 console.error("Error processing voice message:", error);
                 const errorMessage = error.message?.includes("429")
