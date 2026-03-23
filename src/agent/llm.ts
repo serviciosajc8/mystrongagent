@@ -116,9 +116,9 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
   
   if (openRouter) {
     try {
-      // Selección de modelos gratuitos estables en OpenRouter (Google Gemini es el más fiable)
-      const primaryModel = "google/gemini-2.0-flash-exp:free";
-      const secondaryModel = "google/gemini-2.0-flash-lite-preview-02-05:free";
+      // Selección de modelos gratuitos estables en OpenRouter desde el .env
+      const primaryModel = env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
+      const secondaryModel = "google/gemini-2.0-flash-exp:free"; // Doble seguro
       
       const model = useFallback ? secondaryModel : primaryModel;
       
