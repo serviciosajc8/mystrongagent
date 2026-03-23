@@ -97,7 +97,7 @@ export async function getConversationHistory(sessionId: string, limitNum: number
   }
 }
 
-export async function updateSession(sessionId: string, data: { title?: string, projectId?: string, createdAt?: string }) {
+export async function updateSession(sessionId: string, data: any) {
   try {
     const db = getDB();
     if (!db) return;
@@ -228,6 +228,22 @@ export async function readBovedaFile(name: string) {
     return null;
   } catch (error) {
     console.error("Error al leer boveda firebase:", error);
+    return null;
+  }
+}
+
+export async function getSessionMetadata(sessionId: string) {
+  try {
+    const db = getDB();
+    if (!db) return null;
+    const sessionRef = doc(db, 'sessions', sessionId);
+    const docSnap = await getDoc(sessionRef);
+    if (docSnap.exists()) {
+      return docSnap.data();
+    }
+    return null;
+  } catch (error) {
+    console.error("Error al obtener metadata de sesion firebase:", error);
     return null;
   }
 }

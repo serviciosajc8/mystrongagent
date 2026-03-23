@@ -36,7 +36,7 @@ function helperFormatMsg(msg: any) {
   };
 }
 
-export async function processUserMessage(sessionId: string, userId: number, userMessage: string): Promise<string> {
+export async function processUserMessage(sessionId: string, userId: number, userMessage: string, preferredModel?: string): Promise<string> {
   // Guardamos mensaje del usuario
   await saveMessage(sessionId, { role: 'user', content: userMessage });
 
@@ -48,7 +48,7 @@ export async function processUserMessage(sessionId: string, userId: number, user
     generateCompletion([
       { role: 'system', content: 'Crea un título de 3 palabras para este chat.' },
       { role: 'user', content: userMessage }
-    ]).then(res => {
+    ], undefined, false, 0, preferredModel).then(res => {
       if (res?.content) {
         import("../memory/firebase.js").then(m => m.updateSession(sessionId, { title: (res.content || "Nueva Sesión").replace(/["'./]/g, '') }));
       }
@@ -72,7 +72,7 @@ export async function processUserMessage(sessionId: string, userId: number, user
     })];
 
     // Call LLM
-    const responseMessage = await generateCompletion(history as any, toolsSchema);
+    const responseMessage = await generateCompletion(history as any, toolsSchema, false, 0, preferredModel);
     
     if (!responseMessage) {
       return "Lo siento, ha ocurrido un error al procesar la respuesta.";

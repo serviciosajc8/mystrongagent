@@ -46,8 +46,28 @@ const GROQ_MODELS = [
   "mixtral-8x7b-32768",
 ];
 
-export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0) {
+export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0, overrideModel?: string) {
   const formattedMessages = prepareMessages(messages);
+
+  // Si el usuario pidió un modelo específico, intentarlo primero por OpenRouter
+  if (overrideModel && openRouter && !useFallback) {
+    try {
+      console.log(`[LLM] Usando modelo solicitado por usuario: ${overrideModel}...`);
+      const response = await openRouter.chat.completions.create({
+        model: overrideModel,
+        messages: formattedMessages,
+        tools: tools && tools.length > 0 ? tools : undefined,
+        tool_choice: tools && tools.length > 0 ? "auto" : undefined,
+        temperature: 0.5,
+      });
+      if (response && response.choices && response.choices.length > 0) {
+        return response.choices[0].message;
+      }
+    } catch (error: any) {
+       console.error(`Error con modelo manual (${overrideModel}):`, error.message);
+       // Si el modelo manual falla, caemos al flujo normal automático
+    }
+  }
 
   if (!useFallback && groq && groqModelIndex < GROQ_MODELS.length) {
     const currentModel = GROQ_MODELS[groqModelIndex];

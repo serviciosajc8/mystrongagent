@@ -1,7 +1,7 @@
 import { Bot, InputFile } from "grammy";
 import { env } from "../config/env.js";
 import { processUserMessage } from "../agent/loop.js";
-import { clearHistory } from "../memory/firebase.js";
+import { clearHistory, updateSession, getSessionMetadata } from "../memory/firebase.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -138,6 +138,29 @@ function setupBot() {
             await ctx.reply("Historial de memoria borrado para tu sesión de Telegram.");
         });
 
+        // Comando /cerebro [modelo]
+        newBot.command("cerebro", async (ctx) => {
+            const args = ctx.match;
+            const userId = ctx.from!.id;
+            const sessionId = `telegram_session_${userId}`;
+            
+            if (!args) {
+                await ctx.reply("🧠 *Selección de Cerebro*\n\nEscribe `/cerebro [nombre]` para cambiar mi inteligencia.\n\n*Opciones populares:*\n- `claude` (Anthropic Claude 3)\n- `gemini` (Google Gemini 2.0)\n- `llama` (Meta Llama 3.1 405B)\n- `groq` (Automático ultra-rápido)\n\n_Ejemplo: /cerebro claude_", { parse_mode: "Markdown" });
+                return;
+            }
+
+            let modelId = "";
+            let friendlyName = args.toLowerCase();
+            if (friendlyName.includes("claude")) modelId = "anthropic/claude-3-haiku:free";
+            else if (friendlyName.includes("gemini")) modelId = "google/gemini-2.0-flash-exp:free";
+            else if (friendlyName.includes("llama")) modelId = "meta-llama/llama-3.1-405b-instruct:free";
+            else if (friendlyName.includes("groq")) modelId = ""; // Volver a automático
+            else modelId = args; // Manual si puso el ID completo
+
+            await updateSession(sessionId, { preferredModel: modelId });
+            await ctx.reply(`🧠 *Cerebro configurado:* \`${friendlyName}\`\n\nA partir de ahora, procesaré tus mensajes con esta inteligencia.`, { parse_mode: "Markdown" });
+        });
+
         // Listen to all text messages
         // Comando /reset (Alias de /clear para mayor intuición)
         newBot.command("reset", async (ctx) => {
@@ -149,17 +172,24 @@ function setupBot() {
 
         newBot.on("message:text", async (ctx) => {
             try {
-                // Notificar lectura inmediatamente con acción de "escribiendo"
-                await ctx.replyWithChatAction("typing");
-                const thinkingMsg = await ctx.reply("🧠 Pensando...", { 
-                    reply_parameters: { message_id: ctx.message.message_id }
-                });
-
                 const userId = ctx.from.id;
                 const sessionId = `telegram_session_${userId}`;
                 
-                console.log(`[Bot] Procesando mensaje de ${userId}: ${ctx.message.text.substring(0, 30)}...`);
-                const response = await processUserMessage(sessionId, userId, ctx.message.text);
+                // Obtener preferencia de cerebro
+                const sessionMeta = await getSessionMetadata(sessionId);
+                const preferredModel = sessionMeta?.preferredModel;
+
+                // Notificar lectura inmediatamente con acción de "escribiendo"
+                await ctx.replyWithChatAction("typing");
+                const thinkingText = preferredModel ? `🧠 Pensando con ${preferredModel.split('/')[1] || preferredModel}...` : "🧠 Pensando...";
+                const thinkingMsg = await ctx.reply(thinkingText, { 
+                    reply_parameters: { message_id: ctx.message.message_id }
+                });
+
+                const userText = ctx.message.text || "";
+                
+                // Procesar con el bot (pasando el modelo preferido si existe)
+                const response = await processUserMessage(sessionId, userId, userText, preferredModel);
                 
                 await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);
                 await handleSmartReply(ctx, response);
