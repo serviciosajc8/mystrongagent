@@ -116,7 +116,7 @@ function setupBot() {
             const userId = ctx.from.id.toString();
             if (!env.TELEGRAM_ALLOWED_USER_IDS.includes(userId)) {
                 console.warn(`[Security] Unauthorized access attempt from User ID: ${userId}`);
-                await ctx.reply("No estás autorizado para usar este bot.");
+                await ctx.reply(`🚫 No estás autorizado para usar este bot.\nTu User ID es: ${userId}`);
                 return;
             }
             
@@ -157,10 +157,17 @@ function setupBot() {
                 await handleSmartReply(ctx, response);
             } catch (error: any) {
                 console.error("Error processing message:", error);
-                const errorMessage = error.message?.includes("429") 
-                    ? "⚠️ Mis servidores están un poco saturados ahora mismo (error 429). Por favor, espera un minuto e inténtalo de nuevo, ¡estoy haciendo mi mejor esfuerzo! 😅"
-                    : "❌ Hubo un error procesando tu mensaje. Inténtalo de nuevo.";
-                await ctx.reply(errorMessage);
+                const isRateLimit = error.message?.includes("429") || error.status === 429;
+                const errorMessage = isRateLimit
+                    ? "⚠️ Mis servidores están saturados (429). Espera un minuto."
+                    : `❌ Error técnico: ${error.message || 'Desconocido'}. Por favor, reintenta.`;
+                
+                try {
+                    await ctx.reply(errorMessage);
+                } catch {
+                    // Si falla el envío de error, al menos logueamos
+                    console.error("Critical failure sending error message to user");
+                }
             }
         });
 
