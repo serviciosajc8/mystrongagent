@@ -46,6 +46,10 @@ export async function saveMessage(sessionId: string, msg: {
 }) {
   try {
     const db = getDB();
+    if (!db) {
+        console.warn("[Firebase] No se puede guardar mensaje: DB no inicializada.");
+        return;
+    }
     const messagesCol = collection(db, 'messages');
     
     await addDoc(messagesCol, {
@@ -65,6 +69,7 @@ export async function saveMessage(sessionId: string, msg: {
 export async function getConversationHistory(sessionId: string, limitNum: number = 100) {
   try {
     const db = getDB();
+    if (!db) return [];
     const messagesCol = collection(db, 'messages');
     
     // Obtenemos todos los mensajes (o una gran cantidad) y filtramos localmente 
@@ -95,6 +100,7 @@ export async function getConversationHistory(sessionId: string, limitNum: number
 export async function updateSession(sessionId: string, data: { title?: string, projectId?: string, createdAt?: string }) {
   try {
     const db = getDB();
+    if (!db) return;
     await setDoc(doc(db, 'sessions', sessionId), data, { merge: true });
   } catch (error) {
     console.error("Error actualizando sesion:", error);
