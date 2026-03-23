@@ -32,7 +32,7 @@ function prepareMessages(messages: any[]) {
       msg.content = ""; // Fallback seguro
     }
 
-    if (m.tool_calls) msg.tool_calls = m.tool_calls;
+    if (m.tool_calls && m.tool_calls.length > 0) msg.tool_calls = m.tool_calls;
     if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     if (m.name) msg.name = m.name;
     
