@@ -139,6 +139,14 @@ function setupBot() {
         });
 
         // Listen to all text messages
+        // Comando /reset (Alias de /clear para mayor intuición)
+        newBot.command("reset", async (ctx) => {
+            const userId = ctx.from!.id;
+            console.log(`[Bot] Reset requested by user ${userId}`);
+            await clearHistory(`telegram_session_${userId}`);
+            await ctx.reply("🧹 Memoria limpia. ¡Empezamos de cero! 👋");
+        });
+
         newBot.on("message:text", async (ctx) => {
             try {
                 // Notificar lectura inmediatamente con acción de "escribiendo"

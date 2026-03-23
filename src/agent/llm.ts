@@ -22,18 +22,17 @@ function prepareMessages(messages: any[]) {
   return messages.map(m => {
     const msg: any = { role: m.role };
     
-    // El contenido solo se agrega si existe o no es nulo
-    if (m.content !== undefined && m.content !== null) {
-      msg.content = m.content;
-    } else if (m.role === 'assistant' && m.tool_calls) {
-      // Algunos proveedores requieren content nulo o vacío para respuestas con herramientas
-      msg.content = null; 
+    // El contenido debe ser manejado con cuidado según el rol y si hay herramientas
+    if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
+      msg.content = m.content || null; // Algunos proveedores fallan si content es "" con tool_calls
+      msg.tool_calls = m.tool_calls;
+    } else if (m.role === 'tool') {
+      msg.content = m.content || "";
+      msg.tool_call_id = m.tool_call_id;
     } else {
-      msg.content = ""; // Fallback seguro
+      msg.content = m.content || "";
     }
 
-    if (m.tool_calls && m.tool_calls.length > 0) msg.tool_calls = m.tool_calls;
-    if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
     if (m.name) msg.name = m.name;
     
     return msg;
