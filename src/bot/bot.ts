@@ -42,15 +42,17 @@ function setupBot() {
                     try {
                         if (img.filePath && fs.existsSync(img.filePath)) {
                             // Enviar desde archivo local (más fiable)
+                            console.log(`[Bot] Enviando imagen desde archivo local: ${img.filePath}`);
                             const fileBuffer = fs.readFileSync(img.filePath);
                             await ctx.replyWithPhoto(new InputFile(fileBuffer, 'imagen.png'), {
                                 caption: img.prompt.substring(0, 200)
                             });
-                            // Limpiar archivo temporal
+                            // Limpiar archivo temporal para ahorrar espacio
                             try { fs.unlinkSync(img.filePath); } catch {}
                         } else {
-                            // Fallback: enviar por URL
-                            await ctx.replyWithPhoto(img.url, {
+                            // Fallback: enviar por URL (con clave)
+                            console.log(`[Bot] Enviando imagen desde URL: ${img.url}`);
+                            await ctx.replyWithPhoto(new InputFile(img.url), {
                                 caption: img.prompt.substring(0, 200)
                             });
                         }
@@ -128,10 +130,16 @@ function setupBot() {
         // Listen to all text messages
         newBot.on("message:text", async (ctx) => {
             try {
+                // Notificar lectura inmediatamente con acción de "escribiendo"
                 await ctx.replyWithChatAction("typing");
+                const thinkingMsg = await ctx.reply("🧠 Pensando...", { 
+                    reply_parameters: { message_id: ctx.message.message_id }
+                });
+
                 const userId = ctx.from.id;
                 const sessionId = `telegram_session_${userId}`;
-                const thinkingMsg = await ctx.reply("🧠 Pensando...");
+                
+                console.log(`[Bot] Procesando mensaje de ${userId}: ${ctx.message.text.substring(0, 30)}...`);
                 const response = await processUserMessage(sessionId, userId, ctx.message.text);
                 
                 await ctx.api.deleteMessage(ctx.chat.id, thinkingMsg.message_id);

@@ -22,6 +22,9 @@ const DEFAULT_VOICE_ID = 'N2lVS1wzUvWYK7FEAn9H'; // Voz Masculina (Adam)
 
 // --- ROUTES ---
 
+// Health Check (Para Render)
+app.get('/health', (req, res) => res.json({ status: 'ok', server: 'MyStrongAgent', uptime: process.uptime() }));
+
 // TTS Endpoint
 app.post('/api/tts', async (req, res) => {
   try {
@@ -209,6 +212,11 @@ if (fs.existsSync(distPath)) {
 export function startServer() {
   const PORT = Number(process.env.PORT) || 3000;
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌐 Servidor activo en puerto ${PORT}. Node: ${process.version}`);
+    console.log(`\n--------------------------------------------`);
+    console.log(`🌐 MyStrongAgent SERVER STARTED`);
+    console.log(`📍 URL LOCAL: http://localhost:${PORT}`);
+    console.log(`📅 FECHA: ${new Date().toLocaleString()}`);
+    console.log(`🤖 Node Version: ${process.version}`);
+    console.log(`--------------------------------------------\n`);
   });
 }
