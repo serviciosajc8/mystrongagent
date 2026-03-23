@@ -176,10 +176,13 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
     } catch (error: any) {
       console.error("OpenRouter API error:", error.message);
       
-      // Si el primer modelo libre falla por saturación (429), intentar con el segundo de la lista auto-detectada
-      if (error.status === 429 || error.message?.includes("429")) {
+      // Si el primer modelo libre falla por saturación (429) o disponibilidad (404/400), intentar con el segundo
+      const isAvailabilityError = error.status === 429 || error.status === 404 || error.status === 400 || 
+                                 error.message?.includes("429") || error.message?.includes("404") || error.message?.includes("400");
+
+      if (isAvailabilityError) {
          if (!useFallback && cachedFreeModels.length > 1) {
-            console.log("[LLM] Modelo libre 1 saturado, saltando al modelo 2 de respaldo...");
+            console.log("[LLM] Modelo libre 1 no disponible o saturado, saltando al modelo 2 de respaldo...");
             return generateCompletion(messages, tools, true);
          }
       }
