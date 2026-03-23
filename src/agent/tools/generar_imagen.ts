@@ -11,8 +11,8 @@ export const generarImagen = {
     const h = args.height || 1024;
     const model = args.model || 'flux';
     const randomSeed = Math.floor(Math.random() * 1000000);
-    
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${w}&height=${h}&seed=${randomSeed}&model=${model}&nologo=true&enhance=true`;
+    const key = "pk_31oNBvU9JLA1ApNX"; // Public key from Pollinations PLAY
+    const imageUrl = `https://gen.pollinations.ai/image/${encodedPrompt}?width=${w}&height=${h}&seed=${randomSeed}&model=${model}&nologo=true&key=${key}`;
     
     console.log(`[ImageGen] Descargando imagen desde: ${imageUrl}`);
     
@@ -71,8 +71,8 @@ export const generarImagen = {
           },
           model: {
             type: "string",
-            description: "Modelo a usar. Opciones: 'flux' (general), 'flux-realism' (fotos), 'flux-anime' (anime), 'flux-3d' (render 3D), 'turbo' (rápido).",
-            enum: ["flux", "flux-realism", "flux-anime", "flux-3d", "turbo"]
+            description: "Modelo a usar. 'flux' es el mejor y estándar. 'grok-imagine' es muy bueno también.",
+            enum: ["flux", "grok-imagine", "turbo"]
           }
         },
         required: ["prompt_en_ingles"],
