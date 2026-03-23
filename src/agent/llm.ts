@@ -116,9 +116,9 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
   
   if (openRouter) {
     try {
-      // Intentar primero con el modelo gratuito más rápido (Gemini 2.0 Flash)
+      // Selección de modelos gratuitos estables en OpenRouter
       const primaryModel = "google/gemini-2.0-flash-exp:free";
-      const secondaryModel = "meta-llama/llama-3.1-405b-instruct:free";
+      const secondaryModel = "anthropic/claude-3-haiku:free";
       
       const model = useFallback ? secondaryModel : primaryModel;
       
