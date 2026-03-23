@@ -22,9 +22,8 @@ function prepareMessages(messages: any[]) {
   return messages.map(m => {
     const msg: any = { role: m.role };
     
-    // El contenido debe ser manejado con cuidado según el rol y si hay herramientas
     if (m.role === 'assistant' && m.tool_calls && m.tool_calls.length > 0) {
-      msg.content = m.content || null; // Algunos proveedores fallan si content es "" con tool_calls
+      msg.content = m.content || null;
       msg.tool_calls = m.tool_calls;
     } else if (m.role === 'tool') {
       msg.content = m.content || "";
@@ -46,28 +45,38 @@ const GROQ_MODELS = [
   "mixtral-8x7b-32768",
 ];
 
+// Modelos de respaldo hardcodeados en orden de preferencia (nunca quedar sin opciones)
+const FALLBACK_MODELS = [
+  "google/gemini-2.0-flash-exp:free",
+  "google/gemini-flash-1.5:free",
+  "meta-llama/llama-3.2-11b-vision-instruct:free",
+  "meta-llama/llama-3.1-8b-instruct:free",
+  "qwen/qwen-2.5-7b-instruct:free",
+  "mistralai/mistral-7b-instruct:free",
+];
+
 let cachedFreeModels: string[] = [];
 let lastCacheUpdate = 0;
 
-async function getBestFreeModel(): Promise<string> {
-  // Solo actualizar el cache cada 1 hora para no saturar la API
+async function getOrderedFreeModels(): Promise<string[]> {
+  // Refrescar cache cada hora
   if (cachedFreeModels.length > 0 && Date.now() - lastCacheUpdate < 3600000) {
-    return cachedFreeModels[0];
+    return cachedFreeModels;
   }
 
   try {
-    console.log("[LLM] Buscando mejores modelos gratuitos en OpenRouter...");
+    console.log("[LLM] Buscando modelos gratuitos en OpenRouter en tiempo real...");
     const response = await fetch("https://openrouter.ai/api/v1/models");
     const data: any = await response.json();
     
-    // Filtrar modelos gratuitos (prompt y completion cost = 0)
-    const freeModels = data.data
+    // Filtrar solo modelos con costo cero
+    const freeModels: string[] = data.data
       .filter((m: any) => m.pricing && m.pricing.prompt === "0")
-      .map((m: any) => m.id);
+      .map((m: any) => m.id as string);
 
-    // Priorizar modelos específicos si existen en la lista de gratis
-    const priority = ["google/gemini-2.0-flash-exp:free", "google/gemini", "anthropic/claude-3-haiku:free", "meta-llama/llama-3.1-70b-instruct:free"];
-    const sorted = freeModels.sort((a: any, b: any) => {
+    // Priorizar Gemini > Llama > otros
+    const priority = ["google/gemini", "meta-llama", "qwen", "mistralai"];
+    const sorted = freeModels.sort((a, b) => {
       const idxA = priority.findIndex(p => a.includes(p));
       const idxB = priority.findIndex(p => b.includes(p));
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
@@ -77,24 +86,76 @@ async function getBestFreeModel(): Promise<string> {
     });
 
     if (sorted.length > 0) {
-      cachedFreeModels = sorted;
+      // Combinar la lista en tiempo real con los fallbacks hardcodeados (sin duplicados)
+      const combined = [...new Set([...sorted, ...FALLBACK_MODELS])];
+      cachedFreeModels = combined;
       lastCacheUpdate = Date.now();
-      return sorted[0];
+      console.log(`[LLM] ${combined.length} modelos gratuitos disponibles. Top: ${combined[0]}`);
+      return combined;
     }
   } catch (e) {
-    console.error("Error auto-detecting free models:", e);
+    console.error("[LLM] Error buscando modelos, usando lista de respaldo hardcodeada:", e);
   }
 
-  return env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free";
+  // Si falla la API, usar la lista hardcodeada como último recurso
+  cachedFreeModels = FALLBACK_MODELS;
+  return FALLBACK_MODELS;
+}
+
+// Intenta OpenRouter con una cascada completa de modelos hasta encontrar uno que funcione
+async function tryOpenRouterCascade(messages: any[], tools?: any[], modelIndex = 0): Promise<any> {
+  const models = await getOrderedFreeModels();
+  
+  if (modelIndex >= models.length) {
+    throw new Error("Todos los modelos gratuitos de OpenRouter están no disponibles en este momento. Intenta en unos minutos.");
+  }
+
+  const model = models[modelIndex];
+  console.log(`[LLM] OpenRouter - Intentando modelo ${modelIndex + 1}/${models.length}: ${model}`);
+  
+  try {
+    const response = await openRouter!.chat.completions.create({
+      model: model,
+      messages: messages,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      tool_choice: tools && tools.length > 0 ? "auto" : undefined,
+      temperature: 0.5,
+    });
+
+    if (!response || !response.choices || response.choices.length === 0) {
+      throw new Error("Respuesta vacía");
+    }
+    
+    console.log(`[LLM] ✅ Éxito con modelo: ${model}`);
+    return response.choices[0].message;
+  } catch (error: any) {
+    const msg = error.message || "";
+    const status = error.status || 0;
+    
+    // Si es un error de disponibilidad/saturación/guardrail, intentar con el siguiente modelo
+    const isRetryable = status === 429 || status === 404 || status === 400 ||
+                        msg.includes("429") || msg.includes("404") || 
+                        msg.includes("guardrail") || msg.includes("data policy") ||
+                        msg.includes("no endpoints") || msg.includes("not found") ||
+                        msg.includes("decommissioned");
+    
+    if (isRetryable) {
+      console.log(`[LLM] Modelo ${model} no disponible (${status || msg.slice(0,50)}), probando siguiente...`);
+      return tryOpenRouterCascade(messages, tools, modelIndex + 1);
+    }
+    
+    // Error fatal no recuperable
+    throw new Error(`Error Proveedor (Respaldo): ${msg}`);
+  }
 }
 
 export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0, overrideModel?: string) {
   const formattedMessages = prepareMessages(messages);
 
-  // Si el usuario pidió un modelo específico, intentarlo primero por OpenRouter
+  // Si el usuario eligió un modelo específico via /cerebro
   if (overrideModel && openRouter && !useFallback) {
     try {
-      console.log(`[LLM] Usando modelo solicitado por usuario: ${overrideModel}...`);
+      console.log(`[LLM] Usando modelo elegido por usuario: ${overrideModel}...`);
       const response = await openRouter.chat.completions.create({
         model: overrideModel,
         messages: formattedMessages,
@@ -102,15 +163,14 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
         tool_choice: tools && tools.length > 0 ? "auto" : undefined,
         temperature: 0.5,
       });
-      if (response && response.choices && response.choices.length > 0) {
-        return response.choices[0].message;
-      }
+      if (response?.choices?.length > 0) return response.choices[0].message;
     } catch (error: any) {
-       console.error(`Error con modelo manual (${overrideModel}):`, error.message);
-       // Si el modelo manual falla, caemos al flujo normal automático
+      console.error(`Error con modelo manual (${overrideModel}):`, error.message);
+      // Si falla el modelo manual, caer al flujo automático
     }
   }
 
+  // Intentar con Groq primero (el más rápido)
   if (!useFallback && groq && groqModelIndex < GROQ_MODELS.length) {
     const currentModel = GROQ_MODELS[groqModelIndex];
     try {
@@ -123,73 +183,36 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
         temperature: 0.5,
       });
 
-      if (!response || !response.choices || response.choices.length === 0) {
-        throw new Error("Respuesta vacía de Groq");
-      }
+      if (!response?.choices?.length) throw new Error("Respuesta vacía de Groq");
       return response.choices[0].message;
     } catch (error: any) {
       console.error(`Groq error (${currentModel}):`, error.message);
       
       const errorMsg = error.message?.toLowerCase() || "";
       const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
-      const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed to call a function") || errorMsg.includes("failed_generation");
+      const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed_generation");
 
-      // Si es un 400 fatal (y no herramientas/obsoleto), lanzar error
       if (error.status === 400 && !isDecommissioned && !isToolError) throw error;
 
-      // Si es un 429 (Saturación), no reintentar con Groq, saltar directo a OpenRouter
+      // 429 = saturado, saltar directo a OpenRouter
       if (error.status === 429 && openRouter) {
-        console.log("Groq saturado (429), saltando directo a OpenRouter...");
-        return generateCompletion(messages, tools, true);
+        console.log("Groq saturado (429), saltando a OpenRouter...");
+        if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       }
 
+      // Intentar siguiente modelo de Groq
       if (groqModelIndex + 1 < GROQ_MODELS.length) {
-        console.log(`[LLM] Reintentando con el siguiente modelo de Groq...`);
-        return generateCompletion(messages, tools, false, groqModelIndex + 1);
+        return generateCompletion(messages, tools, false, groqModelIndex + 1, overrideModel);
       }
 
-      if (openRouter) {
-        console.log("Cambiando a OpenRouter por error en todos los modelos de Groq...");
-        return generateCompletion(messages, tools, true);
-      }
-      throw new Error(`Groq falló tras varios intentos: ${error.message}`);
-    }
-  } 
-  
-  if (openRouter) {
-    try {
-      // Selección automática del mejor modelo gratuito disponible en tiempo real
-      const model = useFallback && cachedFreeModels.length > 1 ? cachedFreeModels[1] : await getBestFreeModel();
-      
-      console.log(`[LLM] Usando mejor modelo libre disponible: ${model}...`);
-      const response = await openRouter.chat.completions.create({
-        model: model,
-        messages: formattedMessages,
-        tools: tools && tools.length > 0 ? tools : undefined,
-        tool_choice: tools && tools.length > 0 ? "auto" : undefined,
-        temperature: 0.5,
-      });
-      if (!response || !response.choices || response.choices.length === 0) {
-        throw new Error("Respuesta vacía de OpenRouter");
-      }
-      return response.choices[0].message;
-    } catch (error: any) {
-      console.error("OpenRouter API error:", error.message);
-      
-      // Si el primer modelo libre falla por saturación (429) o disponibilidad (404/400), intentar con el segundo
-      const isAvailabilityError = error.status === 429 || error.status === 404 || error.status === 400 || 
-                                 error.message?.includes("429") || error.message?.includes("404") || error.message?.includes("400");
-
-      if (isAvailabilityError) {
-         if (!useFallback && cachedFreeModels.length > 1) {
-            console.log("[LLM] Modelo libre 1 no disponible o saturado, saltando al modelo 2 de respaldo...");
-            return generateCompletion(messages, tools, true);
-         }
-      }
-
-      throw new Error(`Error Proveedor (Respaldo): ${error.message}`);
+      // Todos los de Groq fallaron, ir a OpenRouter
+      if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
+      throw new Error(`Groq falló: ${error.message}`);
     }
   }
+
+  // Directo a cascada de OpenRouter (cuando useFallback=true o Groq no disponible)
+  if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
 
   throw new Error("Sin proveedores de IA configurados.");
 }
