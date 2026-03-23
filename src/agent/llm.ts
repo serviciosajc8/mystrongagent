@@ -72,8 +72,14 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
       const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed to call a function") || errorMsg.includes("failed_generation");
 
-      // Solo lanzar error fatal si es un 400 que NO es de herramientas ni de modelo obsoleto
+      // Si es un 400 fatal (y no herramientas/obsoleto), lanzar error
       if (error.status === 400 && !isDecommissioned && !isToolError) throw error;
+
+      // Si es un 429 (Saturación), no reintentar con Groq, saltar directo a OpenRouter
+      if (error.status === 429 && openRouter) {
+        console.log("Groq saturado (429), saltando directo a OpenRouter...");
+        return generateCompletion(messages, tools, true);
+      }
 
       if (groqModelIndex + 1 < GROQ_MODELS.length) {
         console.log(`[LLM] Reintentando con el siguiente modelo de Groq...`);
