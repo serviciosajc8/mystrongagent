@@ -19,6 +19,7 @@ async function main() {
   startServer();
 
   // 4. Start Telegram Bot
+  console.log("Iniciando conexión con Telegram Bot...");
   startBot();
 
   console.log("✅ MyStrongAgent está activo y esperando mensajes.");
