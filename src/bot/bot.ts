@@ -17,6 +17,13 @@ function setupBot() {
 
     try {
         const newBot = new Bot(env.TELEGRAM_BOT_TOKEN);
+        
+        // Verificación proactiva
+        newBot.api.getMe().then((me) => {
+            console.log(`[Telegram] Conectado exitosamente como @${me.username}`);
+        }).catch(err => {
+            console.error("❌ Error de comunicación con Telegram:", err);
+        });
 
         // Función auxiliar para enviar respuestas inteligentes (detectar imágenes)
         async function handleSmartReply(ctx: any, response: string) {
@@ -119,6 +126,10 @@ function setupBot() {
         // Commands
         newBot.command("start", async (ctx) => {
             await ctx.reply("¡Hola! Soy MyStrongAgent. Estoy listo para ayudarte.");
+        });
+
+        newBot.command("ping", async (ctx) => {
+            await ctx.reply(`¡Pong! 🏓 El bot está en línea.\nFecha: ${new Date().toLocaleString()}`);
         });
 
         newBot.command("clear", async (ctx) => {
