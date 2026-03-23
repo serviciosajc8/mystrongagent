@@ -114,6 +114,11 @@ async function tryOpenRouterCascade(messages: any[], tools?: any[], modelIndex =
   console.log(`[LLM] OpenRouter - Intentando modelo ${modelIndex + 1}/${models.length}: ${model}`);
   
   try {
+    // Añadimos un pequeño retardo entre cada intento para evitar que OpenRouter nos bloquee por velocidad
+    if (modelIndex > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     const response = await openRouter!.chat.completions.create({
       model: model,
       messages: messages,
