@@ -177,9 +177,11 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       console.error("OpenRouter API error:", error.message);
       
       // Si el primer modelo libre falla por saturación (429), intentar con el segundo de la lista auto-detectada
-      if (!useFallback && (error.status === 429 || error.message?.includes("429"))) {
-         console.log("[LLM] Modelo libre saturado, saltando al siguiente de la lista detectada...");
-         return generateCompletion(messages, tools, true);
+      if (error.status === 429 || error.message?.includes("429")) {
+         if (!useFallback && cachedFreeModels.length > 1) {
+            console.log("[LLM] Modelo libre 1 saturado, saltando al modelo 2 de respaldo...");
+            return generateCompletion(messages, tools, true);
+         }
       }
 
       throw new Error(`Error Proveedor (Respaldo): ${error.message}`);
