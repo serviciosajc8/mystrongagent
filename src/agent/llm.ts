@@ -137,15 +137,16 @@ async function tryOpenRouterCascade(messages: any[], tools?: any[], modelIndex =
     const msg = error.message || "";
     const status = error.status || 0;
     
-    // Si es un error de disponibilidad/saturación/guardrail, intentar con el siguiente modelo
-    const isRetryable = status === 429 || status === 404 || status === 400 ||
-                        msg.includes("429") || msg.includes("404") || 
+    // Si es un error de disponibilidad/saturación/pago/guardrail, saltar al siguiente modelo
+    const isRetryable = status === 429 || status === 404 || status === 400 || status === 402 ||
+                        msg.includes("429") || msg.includes("404") || msg.includes("402") ||
                         msg.includes("guardrail") || msg.includes("data policy") ||
                         msg.includes("no endpoints") || msg.includes("not found") ||
-                        msg.includes("decommissioned");
+                        msg.includes("decommissioned") || msg.includes("provider") ||
+                        msg.includes("payment") || msg.includes("quota");
     
     if (isRetryable) {
-      console.log(`[LLM] Modelo ${model} no disponible (${status || msg.slice(0,50)}), probando siguiente...`);
+      console.log(`[LLM] Modelo ${model} no disponible/requiere pago (${status}), probando siguiente...`);
       return tryOpenRouterCascade(messages, tools, modelIndex + 1);
     }
     
