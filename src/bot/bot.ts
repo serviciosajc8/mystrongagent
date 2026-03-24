@@ -25,7 +25,7 @@ function setupBot() {
             console.error("❌ Error de comunicación con Telegram:", err);
         });
 
-        // Función auxiliar para enviar respuestas inteligentes (detectar imágenes)
+        // Función auxiliar para enviar respuestas inteligentes (detectar imágenes y dividir texto largo)
         async function handleSmartReply(ctx: any, response: string) {
             // Extraer metadata de imágenes si existe
             const metaMatch = response.match(/<!--IMAGES:(.*?)-->/s);
@@ -42,6 +42,15 @@ function setupBot() {
                 .replace(/<!--IMAGES:.*?-->/s, '')
                 .replace(/!\[.*?\]\(https?:\/\/.*?\)/g, '')
                 .trim();
+
+            // FUNCIÓN PARA DIVIDIR TEXTO LARGO (Límite Telegram 4096)
+            async function sendSplitText(text: string) {
+                const CHUNK_SIZE = 4000;
+                for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+                    const chunk = text.substring(i, i + CHUNK_SIZE);
+                    await ctx.reply(chunk);
+                }
+            }
             
             // Si hay imágenes detectadas en metadata, enviarlas directamente
             if (imagesMeta.length > 0) {
@@ -70,7 +79,7 @@ function setupBot() {
                 }
                 
                 if (cleanResponse) {
-                    await ctx.reply(cleanResponse);
+                    await sendSplitText(cleanResponse);
                 }
                 return;
             }
@@ -87,7 +96,7 @@ function setupBot() {
                 const imageUrl = match[1];
 
                 if (textBefore) {
-                    await ctx.reply(textBefore);
+                    await sendSplitText(textBefore);
                 }
 
                 try {
@@ -102,9 +111,9 @@ function setupBot() {
 
             const remainingText = response.substring(lastIndex).trim();
             if (remainingText) {
-                await ctx.reply(remainingText);
+                await sendSplitText(remainingText);
             } else if (!foundImage && response) {
-                await ctx.reply(response);
+                await sendSplitText(response);
             }
         }
 
