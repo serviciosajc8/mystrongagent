@@ -258,8 +258,10 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       const errorMsg = error.message?.toLowerCase() || "";
       const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
       const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed_generation");
+      const isNoBody = errorMsg.includes("no body") || errorMsg.includes("no content");
 
-      if (error.status === 400 && !isDecommissioned && !isToolError) throw error;
+      // Solo lanzar error fatal si es un 400 que claramente no es de disponibilidad
+      if (error.status === 400 && !isDecommissioned && !isToolError && !isNoBody) throw error;
 
       // 429 = saturado, saltar directo a Gemini o OpenRouter
       if (error.status === 429) {
