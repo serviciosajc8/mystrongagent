@@ -209,13 +209,13 @@ async function tryOllama(messages: any[], tools?: any[]): Promise<any> {
 export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0, overrideModel?: string) {
   const formattedMessages = prepareMessages(messages);
   
-  // Si se fuerza usar Ollama en el .env
-  if (env.MODEL_PROVIDER === "ollama") {
+  // Si se fuerza usar Ollama en el .env (Desactivado automáticamente en Render/Nube)
+  const isCloud = process.env.RENDER === "true" || process.env.NODE_ENV === "production";
+  if (env.MODEL_PROVIDER === "ollama" && !isCloud) {
     try {
       return await tryOllama(formattedMessages, tools);
     } catch (e: any) {
-      console.warn("[LLM] Ollama falló, cayendo a proveedores remotos...");
-      // Si Ollama falla, continúa al flujo normal
+      console.warn("[LLM] Ollama no disponible localmente, cayendo a proveedores remotos...");
     }
   }
 
