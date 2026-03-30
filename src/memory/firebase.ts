@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, where, setDoc, getDoc } from "firebase/firestore";
+import { getFirestore, collection, addDoc, getDocs, query, deleteDoc, doc, where, setDoc, getDoc } from "firebase/firestore";
 import { env } from "../config/env.js";
 
 let dbInstance: any = null;
@@ -81,16 +81,17 @@ export async function getConversationHistory(sessionId: string, limitNum: number
     if (!db) return [];
     const messagesCol = collection(db, 'messages');
 
-    const q = query(
-      messagesCol,
-      where('sessionId', '==', sessionId),
-      orderBy('timestamp', 'asc'),
-      limit(limitNum)
-    );
+    // Solo usamos where() sin orderBy para no requerir índice compuesto.
+    // El ordenamiento se hace en memoria sobre los resultados filtrados.
+    const q = query(messagesCol, where('sessionId', '==', sessionId));
     const snapshot = await getDocs(q);
 
-    return snapshot.docs.map(d => {
-      const row = d.data();
+    const rows = snapshot.docs
+      .map(d => d.data())
+      .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+      .slice(-limitNum);
+
+    return rows.map(row => {
       const msg: any = { role: row.role };
       if (row.content) msg.content = row.content;
       if (row.name) msg.name = row.name;
