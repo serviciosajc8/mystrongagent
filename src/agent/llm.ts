@@ -3,8 +3,16 @@ import OpenAI from "openai";
 import { env } from "../config/env.js";
 import fs from "fs";
 
-const groq = env.GROQ_API_KEY && env.GROQ_API_KEY !== "SUTITUYE POR EL TUYO" 
-  ? new Groq({ apiKey: env.GROQ_API_KEY }) 
+const groq = env.GROQ_API_KEY && env.GROQ_API_KEY !== "SUTITUYE POR EL TUYO"
+  ? new Groq({ apiKey: env.GROQ_API_KEY })
+  : null;
+
+// Google Gemini vía endpoint OpenAI-compatible (gratuito, excelente con herramientas)
+const gemini = env.GOOGLE_AI_API_KEY && env.GOOGLE_AI_API_KEY !== "SUTITUYE POR EL TUYO"
+  ? new OpenAI({
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey: env.GOOGLE_AI_API_KEY,
+    })
   : null;
 
 const openRouter = env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== "SUTITUYE POR EL TUYO"
@@ -100,6 +108,22 @@ async function getOrderedFreeModels(): Promise<string[]> {
   // Si falla la API, usar la lista hardcodeada como último recurso
   cachedFreeModels = FALLBACK_MODELS;
   return FALLBACK_MODELS;
+}
+
+// Intenta Gemini 2.0 Flash directamente (más capaz que OpenRouter free para herramientas)
+async function tryGemini(messages: any[], tools?: any[]): Promise<any> {
+  if (!gemini) throw new Error("Gemini no configurado");
+  console.log("[LLM] Intentando con Gemini 2.0 Flash...");
+  const response = await gemini.chat.completions.create({
+    model: "gemini-2.0-flash",
+    messages,
+    tools: tools && tools.length > 0 ? tools : undefined,
+    tool_choice: tools && tools.length > 0 ? "auto" : undefined,
+    temperature: 0.5,
+  });
+  if (!response?.choices?.length) throw new Error("Respuesta vacía de Gemini");
+  console.log("[LLM] ✅ Éxito con Gemini 2.0 Flash");
+  return response.choices[0].message;
 }
 
 // Intenta OpenRouter con una cascada completa de modelos hasta encontrar uno que funcione
@@ -201,9 +225,10 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
 
       if (error.status === 400 && !isDecommissioned && !isToolError) throw error;
 
-      // 429 = saturado, saltar directo a OpenRouter
-      if (error.status === 429 && openRouter) {
-        console.log("Groq saturado (429), saltando a OpenRouter...");
+      // 429 = saturado, saltar directo a Gemini o OpenRouter
+      if (error.status === 429) {
+        console.log("Groq saturado (429), saltando a Gemini...");
+        if (gemini) return tryGemini(formattedMessages, tools);
         if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       }
 
@@ -212,13 +237,15 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
         return generateCompletion(messages, tools, false, groqModelIndex + 1, overrideModel);
       }
 
-      // Todos los de Groq fallaron, ir a OpenRouter
+      // Todos los de Groq fallaron, ir a Gemini y luego OpenRouter
+      if (gemini) return tryGemini(formattedMessages, tools);
       if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       throw new Error(`Groq falló: ${error.message}`);
     }
   }
 
-  // Directo a cascada de OpenRouter (cuando useFallback=true o Groq no disponible)
+  // Directo a Gemini y luego OpenRouter (cuando useFallback=true o Groq no disponible)
+  if (gemini) return tryGemini(formattedMessages, tools);
   if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
 
   throw new Error("Sin proveedores de IA configurados.");
