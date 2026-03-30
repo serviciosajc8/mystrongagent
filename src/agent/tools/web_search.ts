@@ -22,13 +22,13 @@ export const jinaSearch = {
     }
   },
   execute: async ({ query }: { query: string }): Promise<string> => {
+    const apiKey = process.env.JINA_API_KEY;
     try {
       const url = `https://s.jina.ai/?q=${encodeURIComponent(query)}`;
-      const res = await fetch(url, {
-        signal: timeout(),
-        headers: { "Accept": "text/plain", "X-No-Cache": "true" }
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const headers: Record<string, string> = { "Accept": "text/plain", "X-No-Cache": "true" };
+      if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+      const res = await fetch(url, { signal: timeout(), headers });
+      if (!res.ok) throw new Error(`HTTP ${res.status}${res.status === 401 ? " (requiere JINA_API_KEY)" : ""}`);
       const text = await res.text();
       if (!text || text.length < 50) throw new Error("Respuesta vacía");
       return `🔍 **Jina Search: "${query}"**\n\n${text.substring(0, 8000)}`;

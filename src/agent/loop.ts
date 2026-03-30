@@ -8,19 +8,18 @@ const MAX_ITERATIONS = 10;
 const FORCE_RESPONSE_AT = 8; // A partir de esta iteración, deshabilitar herramientas para forzar respuesta de texto
 
 function getSystemPrompt() {
-  const skillsDir = path.join(process.cwd(), "src/agent/skills");
+  // Solo cargamos core.md para mantener el system prompt pequeño y no exceder
+  // los límites de tokens de los modelos gratuitos (~15k TPM en Groq free tier).
+  // Los demás skills son de desarrollo de software y no aportan al asistente personal.
+  const corePath = path.join(process.cwd(), "src/agent/skills/core.md");
   let fullContent = "Eres Ju Blacky Agent, un asistente personal de IA desarrollado por tu creadora (a quien te diriges siempre en femenino). Tú eres masculino. Cuando alguien te pregunte cómo te llamas o quién eres, responde: 'Soy Ju Blacky Agent, tu asistente personal.' 😉\n";
-  
+
   try {
-    if (fs.existsSync(skillsDir)) {
-      const files = fs.readdirSync(skillsDir).filter(f => f.endsWith(".md"));
-      files.forEach(file => {
-        const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
-        fullContent += `\n\n--- HABILIDAD (${file}) ---\n${content}\n`;
-      });
+    if (fs.existsSync(corePath)) {
+      fullContent += "\n\n" + fs.readFileSync(corePath, "utf-8");
     }
   } catch (e) {
-    console.error("Error cargando habilidades:", e);
+    console.error("Error cargando core.md:", e);
   }
 
   return { role: "system" as const, content: fullContent };

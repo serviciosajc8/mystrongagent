@@ -53,9 +53,8 @@ function prepareMessages(messages: any[]) {
 
 const GROQ_MODELS = [
   "llama-3.3-70b-versatile",
-  "llama3-70b-8192",
   "llama-3.1-8b-instant",
-  "mixtral-8x7b-32768",
+  "llama3-groq-70b-8192-tool-use-preview",
 ];
 
 // Modelos de respaldo hardcodeados en orden de preferencia (nunca quedar sin opciones)
@@ -259,13 +258,14 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       const isDecommissioned = errorMsg.includes("decommissioned") || errorMsg.includes("not found");
       const isToolError = errorMsg.includes("tool_use_failed") || errorMsg.includes("failed_generation");
       const isNoBody = errorMsg.includes("no body") || errorMsg.includes("no content");
+      const isTooBig = error.status === 413 || errorMsg.includes("too large") || errorMsg.includes("request too large");
 
       // Solo lanzar error fatal si es un 400 que claramente no es de disponibilidad
       if (error.status === 400 && !isDecommissioned && !isToolError && !isNoBody) throw error;
 
-      // 429 = saturado, saltar directo a Gemini o OpenRouter
-      if (error.status === 429) {
-        console.log("Groq saturado (429), saltando a Gemini...");
+      // 413 o 429 = saltar directo a Gemini/OpenRouter (más modelos Groq tampoco ayudarán)
+      if (error.status === 429 || isTooBig) {
+        console.log(`Groq ${isTooBig ? "request muy grande (413)" : "saturado (429)"}, saltando a Gemini...`);
         if (gemini) try { return await tryGemini(formattedMessages, tools); } catch (e: any) { console.warn("[LLM] Gemini falló:", e.message); }
         if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       }

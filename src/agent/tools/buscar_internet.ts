@@ -82,7 +82,43 @@ export const buscarInternet = {
   execute: async ({ query }: { query: string }) => {
     console.log(`[Tool] Buscando en internet: "${query}"`);
 
-    // 1. Intentar Brave Search si hay API key configurada
+    // 1. Intentar Serper (Google) si hay API key
+    const serperKey = process.env.SERPER_API_KEY;
+    if (serperKey) {
+      try {
+        const res = await axios.post('https://google.serper.dev/search', { q: query, num: 6, hl: 'es' }, {
+          timeout: 10000,
+          headers: { 'Content-Type': 'application/json', 'X-API-KEY': serperKey }
+        });
+        const organic = res.data?.organic || [];
+        if (organic.length > 0) {
+          console.log('[Tool] ✅ Resultados via Serper (Google)');
+          return formatResults(query, organic.map((r: any) => ({ title: r.title, link: r.link, snippet: r.snippet || '' })));
+        }
+      } catch (err: any) {
+        console.warn(`[Tool] Serper falló: ${err.message}`);
+      }
+    }
+
+    // 2. Intentar Tavily si hay API key
+    const tavilyKey = process.env.TAVILY_API_KEY;
+    if (tavilyKey) {
+      try {
+        const res = await axios.post('https://api.tavily.com/search',
+          { api_key: tavilyKey, query, max_results: 6, search_depth: 'basic' },
+          { timeout: 10000, headers: { 'Content-Type': 'application/json' } }
+        );
+        const results = res.data?.results || [];
+        if (results.length > 0) {
+          console.log('[Tool] ✅ Resultados via Tavily');
+          return formatResults(query, results.map((r: any) => ({ title: r.title, link: r.url, snippet: r.content || '' })));
+        }
+      } catch (err: any) {
+        console.warn(`[Tool] Tavily falló: ${err.message}`);
+      }
+    }
+
+    // 3. Intentar Brave Search si hay API key configurada
     try {
       const results = await searchBrave(query);
       if (results.length > 0) {
@@ -93,7 +129,7 @@ export const buscarInternet = {
       console.warn(`[Tool] Brave Search falló: ${err.message}`);
     }
 
-    // 2. Intentar instancias de SearXNG en orden
+    // 4. Intentar instancias de SearXNG en orden
     for (const instance of SEARXNG_INSTANCES) {
       try {
         console.log(`[Tool] Probando SearXNG: ${instance}`);
