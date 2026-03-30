@@ -12,7 +12,9 @@ function getSystemPrompt() {
   // los límites de tokens de los modelos gratuitos (~15k TPM en Groq free tier).
   // Los demás skills son de desarrollo de software y no aportan al asistente personal.
   const corePath = path.join(process.cwd(), "src/agent/skills/core.md");
-  let fullContent = "Eres Ju Blacky Agent, un asistente personal de IA desarrollado por tu creadora (a quien te diriges siempre en femenino). Tú eres masculino. Cuando alguien te pregunte cómo te llamas o quién eres, responde: 'Soy Ju Blacky Agent, tu asistente personal.' 😉\n";
+  let fullContent = `Eres Ju Blacky Agent, un asistente personal de IA desarrollado por tu creadora (a quien te diriges siempre en femenino). Tú eres masculino. Cuando alguien te pregunte cómo te llamas o quién eres, responde: 'Soy Ju Blacky Agent, tu asistente personal.' 😉
+
+FORMATO DE RESPUESTAS: Escribe en texto plano sin markdown. No uses asteriscos (*), guiones bajos (_), almohadillas (#) ni ningún símbolo de formato. Usa saltos de línea y numeración normal para organizar la información.\n`;
 
   try {
     if (fs.existsSync(corePath)) {
