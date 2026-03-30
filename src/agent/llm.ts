@@ -266,7 +266,7 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       // 429 = saturado, saltar directo a Gemini o OpenRouter
       if (error.status === 429) {
         console.log("Groq saturado (429), saltando a Gemini...");
-        if (gemini) return tryGemini(formattedMessages, tools);
+        if (gemini) try { return await tryGemini(formattedMessages, tools); } catch (e: any) { console.warn("[LLM] Gemini falló:", e.message); }
         if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       }
 
@@ -276,14 +276,14 @@ export async function generateCompletion(messages: any[], tools?: any[], useFall
       }
 
       // Todos los de Groq fallaron, ir a Gemini y luego OpenRouter
-      if (gemini) return tryGemini(formattedMessages, tools);
+      if (gemini) try { return await tryGemini(formattedMessages, tools); } catch (e: any) { console.warn("[LLM] Gemini falló:", e.message); }
       if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
       throw new Error(`Groq falló: ${error.message}`);
     }
   }
 
   // Directo a Gemini y luego OpenRouter (cuando useFallback=true o Groq no disponible)
-  if (gemini) return tryGemini(formattedMessages, tools);
+  if (gemini) try { return await tryGemini(formattedMessages, tools); } catch (e: any) { console.warn("[LLM] Gemini falló:", e.message); }
   if (openRouter) return tryOpenRouterCascade(formattedMessages, tools);
 
   throw new Error("Sin proveedores de IA configurados.");
