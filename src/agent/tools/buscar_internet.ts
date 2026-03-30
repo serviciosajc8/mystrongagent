@@ -1,18 +1,118 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
+];
+
+function getRandomUserAgent() {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+interface SearchResult {
+  title: string;
+  link: string;
+  snippet: string;
+}
+
+async function scrapeGoogle(query: string): Promise<SearchResult[]> {
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&gbv=1&hl=es`;
+  const response = await axios.get(url, {
+    timeout: 8000,
+    headers: { 'User-Agent': getRandomUserAgent() }
+  });
+  
+  const $ = cheerio.load(response.data);
+  const results: SearchResult[] = [];
+  
+  // Google Basic HTML structure: '.egMi0' contains the results, 'h3' for title, 'a' for link, '.VwiC3b' for snippet
+  // Note: gbv=1 uses a different old-school structure
+  $('div.g').each((i, el) => {
+    if (i >= 6) return false;
+    const title = $(el).find('h3').text().trim();
+    const link = $(el).find('a').attr('href');
+    const snippet = $(el).find('.VwiC3b, .s3v9rd').first().text().trim();
+    
+    if (title && link) {
+      let realLink = link;
+      if (link.startsWith('/url?q=')) {
+        realLink = new URL('https://google.com' + link).searchParams.get('q') || link;
+      }
+      results.push({ title, link: realLink, snippet });
+    }
+  });
+
+  return results;
+}
+
+async function scrapeDuckDuckGo(query: string): Promise<SearchResult[]> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const response = await axios.get(url, {
+    timeout: 8000,
+    headers: { 'User-Agent': getRandomUserAgent() }
+  });
+  
+  const $ = cheerio.load(response.data);
+  const results: SearchResult[] = [];
+  
+  $('.result').each((i, el) => {
+    if (i >= 6) return false;
+    const titleEl = $(el).find('.result__a');
+    const title = titleEl.text().trim();
+    const rawLink = titleEl.attr('href') || '';
+    const snippet = $(el).find('.result__snippet').text().trim();
+    
+    if (title && rawLink) {
+      let realLink = rawLink;
+      if (rawLink.includes('uddg=')) {
+        const paramString = rawLink.split('?')[1];
+        const urlParams = new URLSearchParams(paramString);
+        realLink = decodeURIComponent(urlParams.get('uddg') || rawLink);
+      }
+      if (realLink.startsWith('//')) realLink = 'https:' + realLink;
+      results.push({ title, link: realLink, snippet });
+    }
+  });
+  
+  return results;
+}
+
+async function scrapeMojeek(query: string): Promise<SearchResult[]> {
+  const url = `https://www.mojeek.com/search?q=${encodeURIComponent(query)}&lang=es`;
+  const response = await axios.get(url, {
+    timeout: 8000,
+    headers: { 'User-Agent': getRandomUserAgent() }
+  });
+  
+  const $ = cheerio.load(response.data);
+  const results: SearchResult[] = [];
+  
+  $('.results-standard .ob').each((i, el) => {
+    if (i >= 6) return false;
+    const title = $(el).find('a.t').text().trim();
+    const link = $(el).find('a.t').attr('href') || '';
+    const snippet = $(el).find('.s').text().trim();
+    if (title && link) results.push({ title, link, snippet });
+  });
+  
+  return results;
+}
+
 export const buscarInternet = {
   schema: {
     type: "function",
     function: {
       name: "buscar_internet",
-      description: "Busca información actualizada en tiempo real en internet sobre cualquier tema (noticias, eventos, datos actuales). Usa esta herramienta cuando el usuario pregunte sobre noticias, eventos recientes, clima, sismos, precios, o cualquier dato que pueda haber cambiado.",
+      description: "Busca información actualizada en tiempo real en internet sobre cualquier tema. Usa Google, DuckDuckGo y otros motores para garantizar resultados frescos y evitar bloqueos.",
       parameters: {
         type: "object",
         properties: {
           query: {
             type: "string",
-            description: "La consulta de búsqueda. Sé específico. Ej: 'último sismo México hoy', 'clima CDMX hoy', 'noticias Guatemala 2025'",
+            description: "La consulta de búsqueda específica.",
           },
         },
         required: ["query"],
@@ -20,78 +120,43 @@ export const buscarInternet = {
     },
   },
   execute: async ({ query }: { query: string }) => {
-    try {
-      console.log(`[Tool] Buscando en internet: ${query}`);
-      
-      // Primary: DuckDuckGo HTML (probado: retorna ~10 resultados confiables)
-      const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-      const response = await axios.get(searchUrl, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'es-MX,es;q=0.9,en-US;q=0.7,en;q=0.5',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
+    console.log(`[Tool] Buscando en internet: "${query}"`);
+    
+    let allResults: SearchResult[] = [];
+    const engines = [
+      { name: 'Google', fn: scrapeGoogle },
+      { name: 'DuckDuckGo', fn: scrapeDuckDuckGo },
+      { name: 'Mojeek', fn: scrapeMojeek }
+    ];
+
+    for (const engine of engines) {
+      try {
+        console.log(`[Tool] Probando con ${engine.name}...`);
+        const results = await engine.fn(query);
+        if (results && results.length > 0) {
+          allResults = results;
+          console.log(`[Tool] ✅ Éxito con ${engine.name}. Se encontraron ${results.length} resultados.`);
+          break; // Detenerse si el motor dio resultados
         }
-      });
-
-      const $ = cheerio.load(response.data);
-      const results: { title: string; link: string; snippet: string }[] = [];
-
-      // DuckDuckGo HTML usa `.result` con `.result__a` y `.result__snippet`
-      $('.result').each((i, el) => {
-        if (i >= 8) return false; // Solo primeros 8 resultados
-        
-        const titleEl = $(el).find('.result__a');
-        const title = titleEl.text().trim();
-        const rawLink = titleEl.attr('href') || '';
-        const snippet = $(el).find('.result__snippet').text().trim();
-        
-        if (!title || !rawLink) return;
-
-        // Decodificar links DDG que vienen como //duckduckgo.com/l/?uddg=URL_ENCODED
-        let realLink = rawLink;
-        if (rawLink.includes('uddg=')) {
-          try {
-            const paramString = rawLink.split('?')[1];
-            const urlParams = new URLSearchParams(paramString);
-            realLink = decodeURIComponent(urlParams.get('uddg') || rawLink);
-          } catch {
-            realLink = rawLink;
-          }
-        }
-        if (realLink.startsWith('//')) {
-          realLink = 'https:' + realLink;
-        }
-
-        // Filtrar dominios de anuncios/ecommerce irrelevantes
-        const adDomains = ['amazon.com', 'amazon.com.mx', 'ebay.com', 'etsy.com', 'mercadolibre', 'aliexpress.com', 'walmart.com'];
-        const isAd = adDomains.some(domain => realLink.includes(domain));
-        if (isAd) return;
-
-        results.push({ title, link: realLink, snippet });
-      });
-
-      if (results.length === 0) {
-        return `No se encontraron resultados para: "${query}". El motor de búsqueda puede estar bloqueando la solicitud momentáneamente. Intenta ser más específico o usa menos palabras.`;
+      } catch (err: any) {
+        console.warn(`[Tool] ⚠️ Falló ${engine.name}: ${err.message}`);
+        continue; // Probar el siguiente motor
       }
-
-      let output = `🔍 **Resultados de búsqueda: "${query}"**\n\n`;
-      results.forEach((r, idx) => {
-        output += `**[${idx + 1}] ${r.title}**\n`;
-        output += `🔗 ${r.link}\n`;
-        if (r.snippet) output += `📝 ${r.snippet}\n`;
-        output += '\n';
-      });
-
-      output += `---\n💡 *Tip: Si necesitas más detalle de algún resultado, usa la herramienta \`leer_url\` con el link.*`;
-      
-      return output;
-
-    } catch (error: any) {
-      console.error("[Tool] Error en buscar_internet:", error.message);
-      return `Error al buscar "${query}": ${error.message}. Por favor, intenta de nuevo en unos segundos.`;
     }
+
+    if (allResults.length === 0) {
+      return `❌ No se pudo obtener información de internet para "${query}" en este momento tras probar varios motores de búsqueda (Google, DDG, Mojeek). Es posible que haya una restricción de red temporal. Por favor, intenta de nuevo más tarde o simplifica tu búsqueda.`;
+    }
+
+    let output = `🔍 **Resultados de búsqueda: "${query}"**\n\n`;
+    allResults.forEach((r, idx) => {
+      output += `**[${idx + 1}] ${r.title}**\n`;
+      output += `🔗 ${r.link}\n`;
+      if (r.snippet) output += `📝 ${r.snippet}\n`;
+      output += '\n';
+    });
+
+    output += `---\n💡 *Tip: Puedes pedirme "lee el link 1" si necesitas más detalle del primer resultado.*`;
+    return output;
   },
 };
