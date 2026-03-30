@@ -10,6 +10,12 @@ export const env = {
   OPENROUTER_MODEL: process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-exp:free",
   DB_PATH: process.env.DB_PATH || "./memory.db",
   GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || "./service-account.json",
+  FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || "",
+  FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN || "",
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || "",
+  FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET || "",
+  FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
+  FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || "",
 };
 
 export function validateEnv() {
@@ -18,14 +24,26 @@ export function validateEnv() {
   if (!env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN === "SUTITUYE POR EL TUYO") {
     missing.push("TELEGRAM_BOT_TOKEN");
   }
-  
+
   if (!env.GROQ_API_KEY || env.GROQ_API_KEY === "SUTITUYE POR EL TUYO") {
     missing.push("GROQ_API_KEY");
+  }
+
+  const requiredFirebase = [
+    "FIREBASE_API_KEY",
+    "FIREBASE_AUTH_DOMAIN",
+    "FIREBASE_PROJECT_ID",
+    "FIREBASE_APP_ID",
+  ] as const;
+
+  for (const key of requiredFirebase) {
+    if (!env[key] || env[key] === "SUTITUYE POR EL TUYO") {
+      missing.push(key);
+    }
   }
 
   if (missing.length > 0) {
     console.warn(`⚠️ ADVERTENCIA: Faltan variables de entorno requeridas: ${missing.join(", ")}`);
     console.warn("Algunas funciones (como el Bot o el Chat) podrían no funcionar correctamente.");
-    // No salimos con process.exit(1) para permitir que el servidor web al menos intente arrancar
   }
 }

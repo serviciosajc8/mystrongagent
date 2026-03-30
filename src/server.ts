@@ -10,57 +10,40 @@ import os from 'os';
 import { processUserMessage } from './agent/loop.js';
 import { saveMessage, getConversationHistory, getSessionsList, renameSession, clearHistory, updateSession, saveToBoveda as saveBovedaFB, getBovedaFiles, readBovedaFile } from './memory/firebase.js';
 import { generateCompletion, processAudio } from './agent/llm.js';
-
 const app = express();
 
 // Middlewares (Configurar antes de rutas)
 app.use(cors());
 app.use(express.json());
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const DEFAULT_VOICE_ID = 'N2lVS1wzUvWYK7FEAn9H'; // Voz Masculina (Adam)
-
 // --- ROUTES ---
 
 // Health Check (Para Render)
 app.get('/health', (req, res) => res.json({ status: 'ok', server: 'MyStrongAgent', uptime: process.uptime() }));
 
-// TTS Endpoint
+// TTS Endpoint (Microsoft Edge TTS — gratuito, sin API key)
 app.post('/api/tts', async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'No text provided' });
-    if (!ELEVENLABS_API_KEY) return res.status(500).json({ error: 'ElevenLabs API Key not configured' });
 
-    console.log(`[TTS] Generando audio para: ${text.substring(0, 30)}...`);
+    console.log(`[TTS] Generando audio para: ${text.substring(0, 50)}...`);
 
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${DEFAULT_VOICE_ID}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'xi-api-key': ELEVENLABS_API_KEY
-      },
-      body: JSON.stringify({
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75
-        }
-      })
+    const { MsEdgeTTS, OUTPUT_FORMAT } = await import('msedge-tts');
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata('es-MX-JorgeNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+
+    const { audioStream } = tts.toStream(text);
+
+    res.set('Content-Type', 'audio/mpeg');
+    audioStream.pipe(res);
+
+    audioStream.on('error', (err: any) => {
+      console.error('[TTS] Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: err.message });
+      }
     });
-
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      throw new Error(errData.detail?.message || `Error calling ElevenLabs: ${response.status}`);
-    }
-
-    const audioBuffer = await response.arrayBuffer();
-    res.set({
-      'Content-Type': 'audio/mpeg',
-      'Content-Length': String(audioBuffer.byteLength)
-    });
-    res.send(Buffer.from(audioBuffer));
   } catch (error: any) {
     console.error('TTS Error:', error);
     res.status(500).json({ error: error.message });

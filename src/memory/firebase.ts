@@ -1,40 +1,49 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, where, setDoc, getDoc } from "firebase/firestore";
-
-const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.FIREBASE_PROJECT_ID,
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
-};
+import { env } from "../config/env.js";
 
 let dbInstance: any = null;
+let dbInitFailed = false;
 
 export function initDB() {
   if (dbInstance) return dbInstance;
+  if (dbInitFailed) return null;
+
+  const requiredFields = [
+    env.FIREBASE_API_KEY,
+    env.FIREBASE_AUTH_DOMAIN,
+    env.FIREBASE_PROJECT_ID,
+    env.FIREBASE_APP_ID,
+  ];
+
+  const placeholder = "SUTITUYE POR EL TUYO";
+  if (requiredFields.some(f => !f || f === placeholder)) {
+    console.warn("⚠️ Credenciales de Firebase incompletas. La base de datos no funcionará.");
+    dbInitFailed = true;
+    return null;
+  }
 
   try {
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "SUTITUYE POR EL TUYO") {
-        console.warn("⚠️ FIREBASE_API_KEY no configurada. La base de datos no funcionará.");
-        return null;
-    }
-    // Inicializar Firebase App
-    const app = initializeApp(firebaseConfig);
+    const app = initializeApp({
+      apiKey: env.FIREBASE_API_KEY,
+      authDomain: env.FIREBASE_AUTH_DOMAIN,
+      projectId: env.FIREBASE_PROJECT_ID,
+      storageBucket: env.FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: env.FIREBASE_MESSAGING_SENDER_ID,
+      appId: env.FIREBASE_APP_ID,
+    });
     dbInstance = getFirestore(app);
+    console.log("✅ Firebase inicializado correctamente.");
     return dbInstance;
   } catch (error) {
     console.error("❌ Error inicializando Firebase:", error);
+    dbInitFailed = true;
     return null;
   }
 }
 
 export function getDB() {
-  if (!dbInstance) {
-    return initDB();
-  }
-  return dbInstance;
+  return dbInstance ?? initDB();
 }
 
 export async function saveMessage(sessionId: string, msg: {
@@ -47,13 +56,13 @@ export async function saveMessage(sessionId: string, msg: {
   try {
     const db = getDB();
     if (!db) {
-        console.warn("[Firebase] No se puede guardar mensaje: DB no inicializada.");
-        return;
+      console.warn("[Firebase] No se puede guardar mensaje: DB no inicializada.");
+      return;
     }
     const messagesCol = collection(db, 'messages');
-    
+
     await addDoc(messagesCol, {
-      sessionId: sessionId,
+      sessionId,
       role: msg.role,
       content: msg.content || null,
       name: msg.name || null,
@@ -61,7 +70,7 @@ export async function saveMessage(sessionId: string, msg: {
       tool_call_id: msg.tool_call_id || null,
       timestamp: new Date().toISOString()
     });
-  } catch(error) {
+  } catch (error) {
     console.error("Error al guardar mensaje en firebase:", error);
   }
 }
@@ -71,18 +80,17 @@ export async function getConversationHistory(sessionId: string, limitNum: number
     const db = getDB();
     if (!db) return [];
     const messagesCol = collection(db, 'messages');
-    
-    // Obtenemos todos los mensajes (o una gran cantidad) y filtramos localmente 
-    // para evitar el error de falta de índices compuestos en Firestore.
-    const snapshot = await getDocs(messagesCol);
-    const rows = snapshot.docs
-      .map(doc => doc.data())
-      .filter(row => row.sessionId === sessionId);
-    
-    // Ordenar localmente por timestamp
-    rows.sort((a: any, b: any) => (a.timestamp || '').localeCompare(b.timestamp || ''));
 
-    return rows.slice(-limitNum).map(row => {
+    const q = query(
+      messagesCol,
+      where('sessionId', '==', sessionId),
+      orderBy('timestamp', 'asc'),
+      limit(limitNum)
+    );
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(d => {
+      const row = d.data();
       const msg: any = { role: row.role };
       if (row.content) msg.content = row.content;
       if (row.name) msg.name = row.name;
@@ -91,7 +99,7 @@ export async function getConversationHistory(sessionId: string, limitNum: number
       if (row.timestamp) msg.timestamp = row.timestamp;
       return msg;
     });
-  } catch(error) {
+  } catch (error) {
     console.error("Error al obtener historial de firebase:", error);
     return [];
   }
@@ -116,43 +124,23 @@ export async function getSessionsList() {
     const db = getDB();
     if (!db) return [];
 
-    // 1. Obtener todas las sesiones de la colección 'sessions' (fuente de verdad)
-    const sessionsCol = collection(db, 'sessions');
-    const sessionsSnap = await getDocs(sessionsCol);
-    
-    // 2. Si no hay sesiones en la colección, intentamos recuperar IDs de los mensajes (para compatibilidad)
+    const sessionsSnap = await getDocs(collection(db, 'sessions'));
+
     if (sessionsSnap.empty) {
-      console.log("Colección 'sessions' vacía, buscando IDs en mensajes...");
-      const messagesCol = collection(db, 'messages');
-      const msgSnap = await getDocs(messagesCol);
-      const tempMap = new Map();
-      msgSnap.docs.forEach(d => {
-        const data = d.data();
-        if (data.sessionId && !tempMap.has(data.sessionId)) {
-          tempMap.set(data.sessionId, { 
-            id: data.sessionId, 
-            title: data.sessionId, 
-            createdAt: data.timestamp || new Date().toISOString() 
-          });
-        }
-      });
-      return Array.from(tempMap.values()).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+      return [];
     }
 
-    // 3. Formatear resultados desde la colección de sesiones
-    let result = sessionsSnap.docs.map(doc => {
-      const data = doc.data();
+    const result = sessionsSnap.docs.map(d => {
+      const data = d.data();
       return {
-        id: doc.id,
-        title: data.title || doc.id,
+        id: d.id,
+        title: data.title || d.id,
         projectId: data.projectId || null,
         createdAt: data.createdAt || new Date().toISOString()
       };
     });
-    
-    // Ordenar de más reciente a más antiguo
-    result.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
 
+    result.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return result;
   } catch (error) {
     console.error("Error obteniendo lista de sesiones:", error);
@@ -163,18 +151,14 @@ export async function getSessionsList() {
 export async function clearHistory(sessionId: string) {
   try {
     const db = getDB();
+    if (!db) return;
     const messagesCol = collection(db, 'messages');
-    
-    // Filtrado local para borrar sin indexes
-    const snapshot = await getDocs(messagesCol);
-    const toDelete = snapshot.docs.filter(doc => doc.data().sessionId === sessionId);
-    
-    const deletePromises = toDelete.map(document => 
-      deleteDoc(doc(db, 'messages', document.id))
-    );
-    
-    await Promise.all(deletePromises);
-  } catch(error) {
+
+    const q = query(messagesCol, where('sessionId', '==', sessionId));
+    const snapshot = await getDocs(q);
+
+    await Promise.all(snapshot.docs.map(d => deleteDoc(doc(db, 'messages', d.id))));
+  } catch (error) {
     console.error("Error al limpiar historial de firebase:", error);
   }
 }
@@ -185,8 +169,6 @@ export async function saveToBoveda(name: string, content: string) {
   try {
     const db = getDB();
     if (!db) return;
-    const bovedaCol = collection(db, 'boveda');
-    // Usamos el nombre como ID para fácil acceso
     await setDoc(doc(db, 'boveda', name), {
       name,
       content,
@@ -201,15 +183,14 @@ export async function getBovedaFiles() {
   try {
     const db = getDB();
     if (!db) return [];
-    const bovedaCol = collection(db, 'boveda');
-    const snapshot = await getDocs(bovedaCol);
-    return snapshot.docs.map(doc => {
-      const data = doc.data();
+    const snapshot = await getDocs(collection(db, 'boveda'));
+    return snapshot.docs.map(d => {
+      const data = d.data();
       return {
-        name: data.name || doc.id,
+        name: data.name || d.id,
         modified: data.updatedAt || new Date().toISOString()
       };
-    }).sort((a,b) => b.modified.localeCompare(a.modified));
+    }).sort((a, b) => b.modified.localeCompare(a.modified));
   } catch (error) {
     console.error("Error al listar boveda firebase:", error);
     return [];
@@ -220,12 +201,8 @@ export async function readBovedaFile(name: string) {
   try {
     const db = getDB();
     if (!db) return null;
-    const docRef = doc(db, 'boveda', name);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data().content;
-    }
-    return null;
+    const docSnap = await getDoc(doc(db, 'boveda', name));
+    return docSnap.exists() ? docSnap.data().content : null;
   } catch (error) {
     console.error("Error al leer boveda firebase:", error);
     return null;
@@ -236,12 +213,8 @@ export async function getSessionMetadata(sessionId: string) {
   try {
     const db = getDB();
     if (!db) return null;
-    const sessionRef = doc(db, 'sessions', sessionId);
-    const docSnap = await getDoc(sessionRef);
-    if (docSnap.exists()) {
-      return docSnap.data();
-    }
-    return null;
+    const docSnap = await getDoc(doc(db, 'sessions', sessionId));
+    return docSnap.exists() ? docSnap.data() : null;
   } catch (error) {
     console.error("Error al obtener metadata de sesion firebase:", error);
     return null;
