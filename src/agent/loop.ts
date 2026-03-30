@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 
 const MAX_ITERATIONS = 10;
+const FORCE_RESPONSE_AT = 8; // A partir de esta iteración, deshabilitar herramientas para forzar respuesta de texto
 
 function getSystemPrompt() {
   const skillsDir = path.join(process.cwd(), "src/agent/skills");
@@ -71,8 +72,11 @@ export async function processUserMessage(sessionId: string, userId: number, user
       return cleanMsg;
     })];
 
+    // A partir de FORCE_RESPONSE_AT iteraciones, quitamos las herramientas para obligar al LLM a responder
+    const toolsToUse = iterations >= FORCE_RESPONSE_AT ? undefined : toolsSchema;
+
     // Call LLM
-    const responseMessage = await generateCompletion(history as any, toolsSchema, false, 0, preferredModel);
+    const responseMessage = await generateCompletion(history as any, toolsToUse, false, 0, preferredModel);
     
     if (!responseMessage) {
       return "Lo siento, ha ocurrido un error al procesar la respuesta.";
