@@ -9,7 +9,7 @@ const FORCE_RESPONSE_AT = 8; // A partir de esta iteración, deshabilitar herram
 
 function getSystemPrompt() {
   const skillsDir = path.join(process.cwd(), "src/agent/skills");
-  let fullContent = "Eres MyStrongAgent, un asistente personal de IA desarrollado por tu creador (a quien te diriges siempre en femenino). Tú eres masculino. 😉\n";
+  let fullContent = "Eres Ju Blacky Agent, un asistente personal de IA desarrollado por tu creadora (a quien te diriges siempre en femenino). Tú eres masculino. Cuando alguien te pregunte cómo te llamas o quién eres, responde: 'Soy Ju Blacky Agent, tu asistente personal.' 😉\n";
   
   try {
     if (fs.existsSync(skillsDir)) {

@@ -1,16 +1,4 @@
 import axios from 'axios';
-import * as cheerio from 'cheerio';
-
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0'
-];
-
-function getRandomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
 
 interface SearchResult {
   title: string;
@@ -18,87 +6,59 @@ interface SearchResult {
   snippet: string;
 }
 
-async function scrapeGoogle(query: string): Promise<SearchResult[]> {
-  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&gbv=1&hl=es`;
+// Instancias públicas de SearXNG — API JSON, no requiere API key, cloud-friendly
+const SEARXNG_INSTANCES = [
+  'https://searx.be',
+  'https://searxng.site',
+  'https://search.bus-hit.me',
+  'https://searx.tiekoetter.com',
+  'https://paulgo.io',
+];
+
+async function searchSearXNG(query: string, instanceUrl: string): Promise<SearchResult[]> {
+  const url = `${instanceUrl}/search`;
   const response = await axios.get(url, {
-    timeout: 8000,
-    headers: { 'User-Agent': getRandomUserAgent() }
-  });
-  
-  const $ = cheerio.load(response.data);
-  const results: SearchResult[] = [];
-  
-  // Google Basic HTML structure: '.egMi0' contains the results, 'h3' for title, 'a' for link, '.VwiC3b' for snippet
-  // Note: gbv=1 uses a different old-school structure
-  $('div.g').each((i, el) => {
-    if (i >= 6) return false;
-    const title = $(el).find('h3').text().trim();
-    const link = $(el).find('a').attr('href');
-    const snippet = $(el).find('.VwiC3b, .s3v9rd').first().text().trim();
-    
-    if (title && link) {
-      let realLink = link;
-      if (link.startsWith('/url?q=')) {
-        realLink = new URL('https://google.com' + link).searchParams.get('q') || link;
-      }
-      results.push({ title, link: realLink, snippet });
-    }
+    timeout: 10000,
+    params: {
+      q: query,
+      format: 'json',
+      language: 'es',
+      categories: 'general',
+    },
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (compatible; MyBot/1.0)',
+      'Accept': 'application/json',
+    },
   });
 
-  return results;
+  if (!response.data?.results?.length) return [];
+
+  return response.data.results.slice(0, 6).map((r: any) => ({
+    title: r.title || '',
+    link: r.url || '',
+    snippet: r.content || '',
+  }));
 }
 
-async function scrapeDuckDuckGo(query: string): Promise<SearchResult[]> {
-  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  const response = await axios.get(url, {
-    timeout: 8000,
-    headers: { 'User-Agent': getRandomUserAgent() }
-  });
-  
-  const $ = cheerio.load(response.data);
-  const results: SearchResult[] = [];
-  
-  $('.result').each((i, el) => {
-    if (i >= 6) return false;
-    const titleEl = $(el).find('.result__a');
-    const title = titleEl.text().trim();
-    const rawLink = titleEl.attr('href') || '';
-    const snippet = $(el).find('.result__snippet').text().trim();
-    
-    if (title && rawLink) {
-      let realLink = rawLink;
-      if (rawLink.includes('uddg=')) {
-        const paramString = rawLink.split('?')[1];
-        const urlParams = new URLSearchParams(paramString);
-        realLink = decodeURIComponent(urlParams.get('uddg') || rawLink);
-      }
-      if (realLink.startsWith('//')) realLink = 'https:' + realLink;
-      results.push({ title, link: realLink, snippet });
-    }
-  });
-  
-  return results;
-}
+async function searchBrave(query: string): Promise<SearchResult[]> {
+  const apiKey = process.env.BRAVE_SEARCH_API_KEY;
+  if (!apiKey) return [];
 
-async function scrapeMojeek(query: string): Promise<SearchResult[]> {
-  const url = `https://www.mojeek.com/search?q=${encodeURIComponent(query)}&lang=es`;
-  const response = await axios.get(url, {
-    timeout: 8000,
-    headers: { 'User-Agent': getRandomUserAgent() }
+  const response = await axios.get('https://api.search.brave.com/res/v1/web/search', {
+    timeout: 10000,
+    params: { q: query, count: 6, lang: 'es' },
+    headers: {
+      'Accept': 'application/json',
+      'Accept-Encoding': 'gzip',
+      'X-Subscription-Token': apiKey,
+    },
   });
-  
-  const $ = cheerio.load(response.data);
-  const results: SearchResult[] = [];
-  
-  $('.results-standard .ob').each((i, el) => {
-    if (i >= 6) return false;
-    const title = $(el).find('a.t').text().trim();
-    const link = $(el).find('a.t').attr('href') || '';
-    const snippet = $(el).find('.s').text().trim();
-    if (title && link) results.push({ title, link, snippet });
-  });
-  
-  return results;
+
+  return (response.data?.web?.results || []).slice(0, 6).map((r: any) => ({
+    title: r.title || '',
+    link: r.url || '',
+    snippet: r.description || '',
+  }));
 }
 
 export const buscarInternet = {
@@ -106,7 +66,7 @@ export const buscarInternet = {
     type: "function",
     function: {
       name: "buscar_internet",
-      description: "Busca información actualizada en tiempo real en internet sobre cualquier tema. Usa Google, DuckDuckGo y otros motores para garantizar resultados frescos y evitar bloqueos.",
+      description: "Busca información actualizada en tiempo real en internet sobre cualquier tema.",
       parameters: {
         type: "object",
         properties: {
@@ -121,42 +81,44 @@ export const buscarInternet = {
   },
   execute: async ({ query }: { query: string }) => {
     console.log(`[Tool] Buscando en internet: "${query}"`);
-    
-    let allResults: SearchResult[] = [];
-    const engines = [
-      { name: 'Google', fn: scrapeGoogle },
-      { name: 'DuckDuckGo', fn: scrapeDuckDuckGo },
-      { name: 'Mojeek', fn: scrapeMojeek }
-    ];
 
-    for (const engine of engines) {
+    // 1. Intentar Brave Search si hay API key configurada
+    try {
+      const results = await searchBrave(query);
+      if (results.length > 0) {
+        console.log(`[Tool] ✅ Resultados obtenidos via Brave Search.`);
+        return formatResults(query, results);
+      }
+    } catch (err: any) {
+      console.warn(`[Tool] Brave Search falló: ${err.message}`);
+    }
+
+    // 2. Intentar instancias de SearXNG en orden
+    for (const instance of SEARXNG_INSTANCES) {
       try {
-        console.log(`[Tool] Probando con ${engine.name}...`);
-        const results = await engine.fn(query);
-        if (results && results.length > 0) {
-          allResults = results;
-          console.log(`[Tool] ✅ Éxito con ${engine.name}. Se encontraron ${results.length} resultados.`);
-          break; // Detenerse si el motor dio resultados
+        console.log(`[Tool] Probando SearXNG: ${instance}`);
+        const results = await searchSearXNG(query, instance);
+        if (results.length > 0) {
+          console.log(`[Tool] ✅ Resultados obtenidos via ${instance}`);
+          return formatResults(query, results);
         }
       } catch (err: any) {
-        console.warn(`[Tool] ⚠️ Falló ${engine.name}: ${err.message}`);
-        continue; // Probar el siguiente motor
+        console.warn(`[Tool] ${instance} falló: ${err.message}`);
       }
     }
 
-    if (allResults.length === 0) {
-      return `❌ No se pudo obtener información de internet para "${query}" en este momento tras probar varios motores de búsqueda (Google, DDG, Mojeek). Es posible que haya una restricción de red temporal. Por favor, intenta de nuevo más tarde o simplifica tu búsqueda.`;
-    }
-
-    let output = `🔍 **Resultados de búsqueda: "${query}"**\n\n`;
-    allResults.forEach((r, idx) => {
-      output += `**[${idx + 1}] ${r.title}**\n`;
-      output += `🔗 ${r.link}\n`;
-      if (r.snippet) output += `📝 ${r.snippet}\n`;
-      output += '\n';
-    });
-
-    output += `---\n💡 *Tip: Puedes pedirme "lee el link 1" si necesitas más detalle del primer resultado.*`;
-    return output;
+    return `❌ No se encontraron resultados para "${query}" en este momento. Intenta reformular tu búsqueda o inténtalo de nuevo.`;
   },
 };
+
+function formatResults(query: string, results: SearchResult[]): string {
+  let output = `🔍 **Resultados para: "${query}"**\n\n`;
+  results.forEach((r, idx) => {
+    output += `**[${idx + 1}] ${r.title}**\n`;
+    output += `🔗 ${r.link}\n`;
+    if (r.snippet) output += `📝 ${r.snippet}\n`;
+    output += '\n';
+  });
+  output += `---\n💡 *Puedes pedirme "lee el link 1" para obtener más detalle.*`;
+  return output;
+}

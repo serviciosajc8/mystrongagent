@@ -134,7 +134,7 @@ function setupBot() {
 
         // Commands
         newBot.command("start", async (ctx) => {
-            await ctx.reply("¡Hola! Soy MyStrongAgent. Estoy listo para ayudarte.");
+            await ctx.reply("¡Hola! Soy Ju Blacky Agent, tu asistente personal. Estoy listo para ayudarte. 😊");
         });
 
         newBot.command("ping", async (ctx) => {
