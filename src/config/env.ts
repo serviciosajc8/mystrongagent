@@ -17,6 +17,9 @@ export const env = {
   FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || "",
   FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || "",
   GOOGLE_AI_API_KEY: process.env.GOOGLE_AI_API_KEY || "",
+  OLLAMA_HOST: process.env.OLLAMA_HOST || "http://localhost:11434",
+  MODEL_PROVIDER: process.env.MODEL_PROVIDER || "auto", // 'auto', 'ollama', 'groq', 'gemini', 'openrouter'
+  OLLAMA_MODEL: process.env.OLLAMA_MODEL || "llama3.2:3b",
 };
 
 export function validateEnv() {

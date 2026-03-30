@@ -26,6 +26,11 @@ const openRouter = env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== "SUTITUY
     })
   : null;
 
+const ollama = new OpenAI({
+  baseURL: `${env.OLLAMA_HOST}/v1`,
+  apiKey: "ollama", // Required by OpenAI SDK but ignored by Ollama
+});
+
 function prepareMessages(messages: any[]) {
   return messages.map(m => {
     const msg: any = { role: m.role };
@@ -180,8 +185,39 @@ async function tryOpenRouterCascade(messages: any[], tools?: any[], modelIndex =
   }
 }
 
+// Intenta Ollama local
+async function tryOllama(messages: any[], tools?: any[]): Promise<any> {
+  console.log(`[LLM] Intentando con Ollama Local (${env.OLLAMA_MODEL})...`);
+  try {
+    const response = await ollama.chat.completions.create({
+      model: env.OLLAMA_MODEL,
+      messages,
+      tools: tools && tools.length > 0 ? tools : undefined,
+      tool_choice: tools && tools.length > 0 ? "auto" : undefined,
+      temperature: 0.5,
+    });
+
+    if (!response?.choices?.length) throw new Error("Respuesta vacía de Ollama");
+    console.log(`[LLM] ✅ Éxito con Ollama (${env.OLLAMA_MODEL})`);
+    return response.choices[0].message;
+  } catch (error: any) {
+    console.error(`Ollama error:`, error.message);
+    throw error;
+  }
+}
+
 export async function generateCompletion(messages: any[], tools?: any[], useFallback = false, groqModelIndex = 0, overrideModel?: string) {
   const formattedMessages = prepareMessages(messages);
+  
+  // Si se fuerza usar Ollama en el .env
+  if (env.MODEL_PROVIDER === "ollama") {
+    try {
+      return await tryOllama(formattedMessages, tools);
+    } catch (e: any) {
+      console.warn("[LLM] Ollama falló, cayendo a proveedores remotos...");
+      // Si Ollama falla, continúa al flujo normal
+    }
+  }
 
   // Si el usuario eligió un modelo específico via /cerebro
   if (overrideModel && openRouter && !useFallback) {
